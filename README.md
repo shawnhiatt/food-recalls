@@ -1,6 +1,6 @@
 # Food Recalls
 
-**Recalls that actually apply to you.**
+**Recalls that apply to you and your family.**
 
 A household food-safety monitoring tool: it pulls federal recall and outbreak data,
 enriches and filters it down to what actually affects *your household* — your state, the
