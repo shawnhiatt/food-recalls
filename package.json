@@ -1,8 +1,8 @@
 {
-  "name": "recall-log",
+  "name": "food-recalls",
   "version": "0.1.0",
   "private": true,
-  "description": "Recall Log — food recalls that actually apply to you. Household food-safety monitoring: ingests federal recall and outbreak data, enriches it, and matches it against your household.",
+  "description": "Food Recalls — recalls that actually apply to you. Household food-safety monitoring: ingests federal recall and outbreak data, enriches it, and matches it against your household.",
   "scripts": {
     "dev": "convex dev",
     "test": "vitest run",

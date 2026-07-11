@@ -1,4 +1,4 @@
-# Recall Log
+# Food Recalls
 
 **Recalls that actually apply to you.**
 

@@ -42,7 +42,7 @@ one child) initially; schema and architecture stay multi-household from day one.
   deletion and data export, and **push/lock-screen redaction** — push notification text
   contains product name + severity only, never sensitive match reasons ("immunocompromised
   match" appears in-app, not on a lock screen).
-- **Brand identity (settled): "Recall Log" — tagline "Recalls that actually apply to you."**
+- **Brand identity (settled): "Food Recalls" — tagline "Recalls that actually apply to you."**
   Existing recall apps brand around *recalls* (the data); this product brands around *the
   household* (the protection). Voice: calm, plain-spoken, reassuring — the app tells you
   two things: is there a new recall, and does it affect you. Full visual tokens in §12.
@@ -523,7 +523,7 @@ with hazard-type icon, plain-language risk level per §11, red impact line when 
 exists ("12 sick · 4 hospitalized"), UPDATE badge when `updateHistory.length > 1`, reason
 chips when matched.
 
-**Brand identity & tokens:** App name **Recall Log**; tagline "Recalls that actually apply
+**Brand identity & tokens:** App name **Food Recalls**; tagline "Recalls that actually apply
 to you." Typography: **Public Sans** throughout — heavy weight (Bold/Black) for the
 wordmark and section headlines, Regular for dashboard UI and body text. Palette
 (authoritative values, from the prototype's CSS theme):
@@ -662,5 +662,5 @@ Ingest-first, auth-last. Each phase's exit criteria are in §14.
 15. Onboarding: multi-step questionnaire per §11, skippable except location, re-runnable
     via "Redo setup," prefilled.
 16. Scope: US-only food + outbreaks through Phase 7; CPSC first expansion candidate.
-17. Branding: **Recall Log**, tagline "Recalls that actually apply to you"; household-
+17. Branding: **Food Recalls**, tagline "Recalls that actually apply to you"; household-
     centric positioning; brand tokens per §12.
