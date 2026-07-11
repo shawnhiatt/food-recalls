@@ -42,7 +42,7 @@ one child) initially; schema and architecture stay multi-household from day one.
   deletion and data export, and **push/lock-screen redaction** — push notification text
   contains product name + severity only, never sensitive match reasons ("immunocompromised
   match" appears in-app, not on a lock screen).
-- **Brand identity (settled): "Recall Log" — tagline "Recalls that actually apply to you."**
+- **Brand identity (settled): "Don't Eat" — tagline "Food recalls that apply to you and your family."**
   Existing recall apps brand around *recalls* (the data); this product brands around *the
   household* (the protection). Voice: calm, plain-spoken, reassuring — the app tells you
   two things: is there a new recall, and does it affect you. Full visual tokens in §12.
