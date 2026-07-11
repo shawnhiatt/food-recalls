@@ -121,16 +121,20 @@ function toNormalized(doc: Doc<"recalls">): NormalizedRecall {
   return rest as NormalizedRecall;
 }
 
-/** Internal-only count, used by ingest anomaly detection and tests. */
-export const countBySource = internalQuery({
+/**
+ * Internal-only existence check for ingest anomaly detection: "has this
+ * source ever produced records?" A full count would `.collect()` every
+ * document (including the multi-KB `raw` blobs) and blow Convex's 16MB
+ * per-query read limit once the backfill lands — this reads exactly one doc.
+ */
+export const hasAnyFromSource = internalQuery({
   args: { source: v.union(v.literal("fda"), v.literal("fsis")) },
-  handler: async (ctx, args): Promise<number> => {
-    // Fine at pilot scale; swap for a counter document if the table grows huge.
-    const docs = await ctx.db
+  handler: async (ctx, args): Promise<boolean> => {
+    const first = await ctx.db
       .query("recalls")
       .withIndex("by_source_id", (q) => q.eq("source", args.source))
-      .collect();
-    return docs.length;
+      .first();
+    return first !== null;
   },
 });
 

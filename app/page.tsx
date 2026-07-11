@@ -8,6 +8,7 @@ import { FilterBar, type FeedFilters } from "@/components/FilterBar";
 import { SourceHealthBanner } from "@/components/SourceHealthBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { CardListSkeleton } from "@/components/CardListSkeleton";
+import { DisclaimerFooter, FirstRunNotice } from "@/components/Disclaimer";
 
 // Feed (SPEC.md §8): one national feed, reverse-chronological, filter chips.
 // The "For your household" boosted section and reason chips arrive with the
@@ -26,6 +27,7 @@ export default function FeedPage() {
 
   return (
     <main>
+      <FirstRunNotice />
       <SourceHealthBanner />
       <FilterBar filters={filters} onChange={setFilters} />
 
@@ -60,6 +62,7 @@ export default function FeedPage() {
           Loading…
         </p>
       )}
+      <DisclaimerFooter />
     </main>
   );
 }

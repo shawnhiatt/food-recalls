@@ -33,9 +33,19 @@ when it can prove its data sources are current. See SPEC.md §10.
 | Source | Covers | Ingest cadence |
 |---|---|---|
 | openFDA Food Enforcement API | Packaged foods, produce, supplements, pet food | Daily |
-| USDA FSIS Recall API | Meat, poultry, egg products | Every 3 hours |
+| USDA FSIS Recall API | Meat, poultry, egg products | Every 3 hours ⚠️ |
 | FDA Recalls RSS / press releases | Images + risk-group text (Phase 1) | Every 3 hours |
 | CDC outbreak investigations | Foodborne outbreaks (Phase 4) | Every 3 hours |
+
+> ⚠️ **FSIS is currently blocked upstream** (verified 2026-07-11): fsis.usda.gov
+> answers HTTP 403 to every non-browser client — curl, PowerShell, and Convex's
+> fetch all fail regardless of headers, while a real browser gets the data. This
+> is TLS-fingerprint-level bot detection, so no server-side header change can fix
+> it. Until resolved (options: ask FSIS to allowlist, or route via a
+> browser-fingerprint proxy), `sourceHealth` correctly reports FSIS as
+> degraded and the app refuses all-clear reassurance copy — the §10 contract
+> working as designed. Meat/poultry/egg-product recalls are missing from the
+> feed in the meantime.
 
 > **Disclaimer:** Data comes from openFDA, FSIS, and CDC. openFDA states its data is
 > unvalidated and not intended as a public alerting source. This project is not an
@@ -111,20 +121,30 @@ tests/
 
 Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
 
-- [x] **Phase 0** — Ingest, enrich, store (no UI); source health; household seed
+- [x] **Phase 0** — Ingest, enrich, store (no UI); source health; household seed.
+      Exit criteria closed 2026-07-11: full openFDA backfill complete (29,215
+      records, count-parity with the API's advertised total, zero failures) and
+      the §14 enrichment spot-check passed on a 120-record stratified sample —
+      allergen recall 96.8% (≥95% required), audience accuracy 100% (≥90%).
+      Method and findings in [docs/enrichment-spot-check.md](./docs/enrichment-spot-check.md).
 - [ ] **Phase 1** — Read-only PWA dashboard (feed, detail, timeline, bookmarks).
       UI shipped and verified: Core-tier PWA scaffold, public Convex API
-      layer, all four screens tested against live data (455 real openFDA
-      recalls), Lighthouse 100/100/100 (performance/accessibility/best
-      practices) on Feed and Household, responsive 320px–1920px with no
-      overflow, 44px touch targets, WCAG AA color contrast. Still open:
-      FDA RSS/press ingest for images + risk-group text and the Open Food
-      Facts fallback (cards show the hazard-tinted placeholder illustration
-      for every recall until that lands); cross-browser testing beyond
-      Chromium; the Detail page's per-recall SEO metadata doesn't reach
-      `<head>` at parse time due to a Next.js 15 streaming-metadata quirk on
-      client-rendered dynamic routes (low-stakes — this is an unlisted
-      private pilot, §2).
+      layer, all four screens tested against live data, Lighthouse
+      100/100/100 (performance/accessibility/best practices) on Feed and
+      Household, responsive 320px–1920px with no overflow, 44px touch
+      targets, WCAG AA color contrast. Audit fixes landed 2026-07-11:
+      read-time source-health staleness (the §10 gate now fails closed on a
+      dead scheduler), footer + first-run disclaimers, all-clear empty state
+      carries the last-checked timestamp, Household tab renders dynamically.
+      Still open: FDA RSS/press ingest for images + risk-group text and the
+      Open Food Facts fallback (cards show the hazard-tinted placeholder
+      illustration for every recall until that lands; this also replaces the
+      openFDA detail link, which currently points at the raw API record);
+      FSIS upstream 403 (see Data sources above); cross-browser testing
+      beyond Chromium; the Detail page's per-recall SEO metadata doesn't
+      reach `<head>` at parse time due to a Next.js 15 streaming-metadata
+      quirk on client-rendered dynamic routes (low-stakes — this is an
+      unlisted private pilot, §2).
 - [ ] **Phase 2** — Email notifications (matching engine, instant + daily digest)
 - [ ] **Phase 3** — Web push notifications
 - [ ] **Phase 4** — CDC outbreaks

@@ -84,14 +84,10 @@ describe("upsertBatch revisioning (SPEC.md §4, §14 hash stability)", () => {
     expect(again).toEqual({ inserted: 0, materialUpdates: 0, touched: 1 });
   });
 
-  test("countBySource counts only the requested source", async () => {
+  test("hasAnyFromSource sees only the requested source", async () => {
     const t = setupConvex();
     await t.mutation(internal.recalls.upsertBatch, { records: normalizedFixture() });
-    expect(
-      await t.query(internal.recalls.countBySource, { source: "fda" }),
-    ).toBe(5);
-    expect(
-      await t.query(internal.recalls.countBySource, { source: "fsis" }),
-    ).toBe(0);
+    expect(await t.query(internal.recalls.hasAnyFromSource, { source: "fda" })).toBe(true);
+    expect(await t.query(internal.recalls.hasAnyFromSource, { source: "fsis" })).toBe(false);
   });
 });

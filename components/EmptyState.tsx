@@ -2,22 +2,33 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { formatRelativeTime } from "@/lib/format";
 
 /**
  * Reassurance gate (SPEC.md §10): "nothing here" copy is only permitted to
- * read as reassuring when every enabled source is Current. When a source is
- * degraded, the copy switches to explicit incompleteness — never implying
- * "all clear" on data we can't vouch for.
+ * read as reassuring when every enabled source is Current — and all-clear
+ * copy carries the last-checked timestamp (§12) so the reassurance is
+ * provable, not asserted. When a source is degraded, the copy switches to
+ * explicit incompleteness — never implying "all clear" on data we can't
+ * vouch for.
  */
 export function EmptyState({ variant }: { variant: "no-results" | "no-data" }) {
   const status = useQuery(api.sourceHealth.getPublicStatus);
+
+  // Oldest last-success across sources — the most conservative honest claim.
+  const oldestSuccess =
+    status && status.allCurrent
+      ? Math.min(...status.sources.map((s) => s.lastSuccessAt))
+      : null;
 
   const body =
     variant === "no-results"
       ? "No recalls match these filters. Try clearing one or two."
       : status && !status.allCurrent
         ? "Coverage incomplete — we can't confirm the feed is fully up to date yet. Nothing here should be read as “all clear.”"
-        : "No recalls in our records right now. We'll show them here the moment a source reports one.";
+        : `No recalls in our records right now. We'll show them here the moment a source reports one.${
+            oldestSuccess ? ` Sources last checked ${formatRelativeTime(oldestSuccess)}.` : ""
+          }`;
 
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">

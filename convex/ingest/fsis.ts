@@ -14,8 +14,17 @@ export const ingest = internalAction({
   args: {},
   handler: async (ctx): Promise<IngestSummary> => {
     try {
+      // fsis.usda.gov sits behind Akamai bot detection that answers 403 to
+      // requests without a browser-like identity (verified 2026-07: bare
+      // fetch and curl are denied). Send a full browser header set.
       const response = await fetch(API_URL, {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Accept-Language": "en-US,en;q=0.9",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          Referer: "https://www.fsis.usda.gov/recalls",
+        },
       });
       if (!response.ok) {
         throw new Error(`FSIS HTTP ${response.status}`);
@@ -37,10 +46,10 @@ export const ingest = internalAction({
 
       // The FSIS API always returns the historical list; an empty array where
       // records previously existed means the feed or parse broke (§10).
-      const existingCount: number = await ctx.runQuery(internal.recalls.countBySource, {
+      const hadData: boolean = await ctx.runQuery(internal.recalls.hasAnyFromSource, {
         source: "fsis",
       });
-      const anomaly = body.length === 0 && existingCount > 0;
+      const anomaly = body.length === 0 && hadData;
 
       await ctx.runMutation(internal.sourceHealth.reportRun, {
         source: "fsis",

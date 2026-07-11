@@ -20,7 +20,9 @@ export const BIG_NINE_ALLERGENS = [
 export type Allergen = (typeof BIG_NINE_ALLERGENS)[number];
 
 const ALLERGEN_PATTERNS: Record<Allergen, RegExp> = {
-  milk: /\bmilk\b|\bdairy\b|\bwhey\b|\bcasein(?:ate)?\b|\bbutter\b|\bcream\b|\bcheese\b|\blactose\b|\byogurt\b|\bghee\b/i,
+  // Cheese varieties added after the §14 spot-check (docs/enrichment-spot-check.md)
+  // found "cheddar"/"provolone"/"cheesecake" recalls escaping the bare \bcheese\b.
+  milk: /\bmilk\b|\bdairy\b|\bwhey\b|\bcasein(?:ate)?\b|\bbutter\b|\bbuttermilk\b|\bcream\b|\bcheese(?:cake)?\b|\bcheddar\b|\bprovolone\b|\bmozzarella\b|\bparmesan\b|\bgouda\b|\bbrie\b|\bfeta\b|\bricotta\b|\bcustard\b|\blactose\b|\byogurt\b|\bghee\b/i,
   eggs: /\begg(?:s)?\b|\balbumin\b|\bovalbumin\b|\bmayonnaise\b/i,
   fish: /\bfish\b|\banchov(?:y|ies)\b|\bcod\b|\bsalmon\b|\btuna\b|\btilapia\b|\bpollock\b|\bhalibut\b|\bswordfish\b|\bsurimi\b/i,
   crustacean_shellfish:

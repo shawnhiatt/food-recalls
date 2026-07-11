@@ -25,6 +25,15 @@ describe("extractAllergens", () => {
     expect(extractAllergens("contains gluten")).toContain("wheat");
   });
 
+  test("cheese varieties tag milk (§14 spot-check misses, docs/enrichment-spot-check.md)", () => {
+    expect(extractAllergens("Roast beef and cheddar closed face sandwich")).toContain("milk");
+    expect(extractAllergens("HARD-COOKED EGG SALAME & PROVOLONE")).toContain("milk");
+    expect(extractAllergens("Nutrisystem Chocolate Cheesecake")).toContain("milk");
+    expect(extractAllergens("fresh mozzarella and parmesan blend")).toContain("milk");
+    // "butternut" must not false-positive on \bbutter\b.
+    expect(extractAllergens("Roasting Cinnamon Butternut Squash")).toEqual([]);
+  });
+
   test("no allergen text", () => {
     expect(extractAllergens("metal fragments in granola")).toEqual([]);
     expect(extractAllergens("")).toEqual([]);
