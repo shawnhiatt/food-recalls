@@ -1,0 +1,23 @@
+{
+  "name": "food-recalls",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Food Recalls — recalls that actually apply to you. Household food-safety monitoring: ingests federal recall and outbreak data, enriches it, and matches it against your household.",
+  "scripts": {
+    "dev": "convex dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "seed": "convex run seed:seedDefaultHousehold"
+  },
+  "dependencies": {
+    "convex": "^1.17.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^4.0.0",
+    "@types/node": "^26.1.1",
+    "convex-test": "^0.0.35",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

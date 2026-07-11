@@ -1,0 +1,43 @@
+[
+  {
+    "field_title": "Record With No Recall Number",
+    "field_active_notice": "True",
+    "field_establishment": "Numberless Provisions",
+    "field_recall_classification": "Class I",
+    "field_recall_date": "2026-06-01",
+    "field_recall_number": "",
+    "field_recall_reason": "Product Contamination",
+    "field_states": "Ohio",
+    "field_summary": "<p>Missing its recall number.</p>"
+  },
+  {
+    "field_title": "Record With Unparseable Date",
+    "field_active_notice": "True",
+    "field_establishment": "Timeless Meats",
+    "field_recall_classification": "Class II",
+    "field_recall_date": "sometime last spring",
+    "field_recall_number": "099-2026",
+    "field_recall_reason": "Misbranding",
+    "field_states": "Utah",
+    "field_summary": "<p>Date is prose, not a date.</p>"
+  },
+  42,
+  {
+    "field_title": "Valid Record Amid the Wreckage — Pork Sausage Recalled for Undeclared Milk",
+    "field_active_notice": "True",
+    "field_archive_recall": "False",
+    "field_closed_date": "",
+    "field_establishment": "Wreckage Survivors Sausage Co.",
+    "field_press_release": "/recalls-alerts/wreckage-survivors-pork-sausage",
+    "field_product_items": "1-lb. packages of \"BREAKFAST PORK SAUSAGE\" UPC 123456789012",
+    "field_recall_classification": "Class I",
+    "field_recall_date": "2026-06-10",
+    "field_recall_number": "014-2026",
+    "field_recall_reason": "Unreported Allergens",
+    "field_recall_type": "Active Recall",
+    "field_risk_level": "High - Class I",
+    "field_states": "Wisconsin, Minnesota",
+    "field_summary": "<p>The pork sausage contains milk, a known allergen, which is not declared on the label.</p>",
+    "field_year": "2026"
+  }
+]
