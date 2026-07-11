@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care.",
+    "results": { "skip": 0, "limit": 1000, "total": 4 }
+  },
+  "results": [
+    {
+      "reason_for_recall": "Undeclared peanuts",
+      "product_description": "Snack mix with no recall number",
+      "recalling_firm": "No Number Snacks LLC",
+      "classification": "Class I",
+      "status": "Ongoing",
+      "distribution_pattern": "TX",
+      "recall_initiation_date": "20260501",
+      "report_date": "20260510"
+    },
+    {
+      "recall_number": "F-BAD-DATE-2026",
+      "reason_for_recall": "Undeclared soy",
+      "product_description": "Sauce with unparseable dates",
+      "recalling_firm": "Bad Date Foods",
+      "classification": "Class II",
+      "status": "Ongoing",
+      "distribution_pattern": "FL",
+      "recall_initiation_date": "2026136",
+      "report_date": "not-a-date"
+    },
+    {
+      "recall_number": "F-NULLS-2026",
+      "reason_for_recall": null,
+      "product_description": null,
+      "recalling_firm": null,
+      "classification": null,
+      "status": null,
+      "distribution_pattern": null,
+      "code_info": null,
+      "recall_initiation_date": "20260415",
+      "report_date": "20260420"
+    },
+    {
+      "recall_number": "F-GOOD-2026",
+      "reason_for_recall": "Undeclared wheat in seasoning blend",
+      "product_description": "Smokehouse Seasoning Blend, 4 oz jar",
+      "recalling_firm": "Good Record Spice Co",
+      "classification": "Class II",
+      "status": "Ongoing",
+      "distribution_pattern": "Nationwide",
+      "code_info": "Lot 26130",
+      "recall_initiation_date": "20260505",
+      "report_date": "20260512"
+    }
+  ]
+}
