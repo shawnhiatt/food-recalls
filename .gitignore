@@ -13,6 +13,13 @@ node_modules/
 dist/
 .next/
 out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Serwist-generated service worker (swDest: public/sw.js, next.config.ts)
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
 
 # Test / coverage
 coverage/

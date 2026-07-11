@@ -67,6 +67,20 @@ npm test
 npm run typecheck
 ```
 
+### Frontend (Phase 1)
+
+```bash
+# Set the pilot access secret (gates the read-only Household tab — SPEC.md §2)
+npx convex env set PILOT_ACCESS_SECRET <a long random value>
+# Mirror the same value into .env.local (server-only; never NEXT_PUBLIC_):
+#   PILOT_ACCESS_SECRET=<the same value>
+
+npm run dev:web    # Next.js dev server (run `npm run dev` for Convex in another terminal)
+```
+
+`npx convex dev` writes `NEXT_PUBLIC_CONVEX_URL` into `.env.local` automatically on first run.
+See `.env.example` for the full list.
+
 ## Project layout
 
 ```
@@ -76,13 +90,21 @@ convex/
   ingest/              Per-source actions: fetch → normalize → enrich → upsert
   adapters/            Pure normalization per source (openFDA, FSIS) — the
                        project's center of gravity; tested with fixtures
-  lib/                 Enrichment, state normalization, lifecycle, content hash
-  recalls.ts           Upsert with content-hash revisioning + updateHistory
-  sourceHealth.ts      Data-health contract (SPEC.md §10)
+  lib/                 Enrichment, state normalization, lifecycle, content hash,
+                       access.ts (pilot secret gate for household.ts)
+  recalls.ts           Upsert (internal) + public list/get (Phase 1 feed)
+  sourceHealth.ts      Data-health contract (SPEC.md §10) + public status query
+  household.ts         Secret-gated read-only household summary (SPEC.md §2)
+  bookmarks.ts         Public bookmark list/toggle (single-household pilot)
   seed.ts              Pilot household seed, structured as the §11 questionnaire
+app/                    Next.js App Router — Feed / Detail / Saved / Household,
+                       PWA manifest + generated icons, Serwist service worker
+components/             Shared UI (RecallCard, Timeline, FilterBar, etc.)
+lib/                    Frontend-only copy/format helpers (not imported from convex/)
 tests/
   fixtures/            Recorded API response shapes, incl. malformed cases
-  *.test.ts            Adapter, enrichment, hash-stability, sourceHealth tests
+  *.test.ts            Adapter, enrichment, hash-stability, sourceHealth,
+                       recalls/bookmarks/household public-API tests
 ```
 
 ## Build phases
@@ -90,7 +112,19 @@ tests/
 Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
 
 - [x] **Phase 0** — Ingest, enrich, store (no UI); source health; household seed
-- [ ] **Phase 1** — Read-only PWA dashboard (feed, detail, timeline, bookmarks)
+- [ ] **Phase 1** — Read-only PWA dashboard (feed, detail, timeline, bookmarks).
+      UI shipped and verified: Core-tier PWA scaffold, public Convex API
+      layer, all four screens tested against live data (455 real openFDA
+      recalls), Lighthouse 100/100/100 (performance/accessibility/best
+      practices) on Feed and Household, responsive 320px–1920px with no
+      overflow, 44px touch targets, WCAG AA color contrast. Still open:
+      FDA RSS/press ingest for images + risk-group text and the Open Food
+      Facts fallback (cards show the hazard-tinted placeholder illustration
+      for every recall until that lands); cross-browser testing beyond
+      Chromium; the Detail page's per-recall SEO metadata doesn't reach
+      `<head>` at parse time due to a Next.js 15 streaming-metadata quirk on
+      client-rendered dynamic routes (low-stakes — this is an unlisted
+      private pilot, §2).
 - [ ] **Phase 2** — Email notifications (matching engine, instant + daily digest)
 - [ ] **Phase 3** — Web push notifications
 - [ ] **Phase 4** — CDC outbreaks

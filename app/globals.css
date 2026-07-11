@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand tokens — SPEC.md §12 (authoritative values, from the prototype's CSS theme) */
+  --color-primary: #2b7ea7;
+  --color-accent: #f3b838;
+  /* Darker text-only variants of primary/accent (WCAG AA 4.5:1) — the
+     brand-locked hex values above fail as text against white/secondary/page
+     backgrounds (measured 3.95–4.20:1 for primary, 1.56–1.79:1 for accent).
+     Use these instead of --color-primary/--color-accent wherever the token
+     colors text rather than filling an icon, a dot, or a solid button with
+     white text. */
+  --color-primary-text: #1f6483;
+  --color-accent-text: #92600a;
+  --color-background: #f4f7f9;
+  --color-card: #ffffff;
+  --color-secondary: #e5f2f8;
+  --color-foreground: #121d1d;
+  --color-muted-foreground: #6b7174;
+  --color-destructive: #cc272e;
+  --color-border: rgba(18, 29, 29, 0.09);
+  --radius-base: 0.625rem;
+
+  /* Severity colors are quarantined from the brand palette (§12) — never reuse
+     --color-primary/--color-accent to signal danger, and never reuse these to
+     signal brand. */
+  --color-severity-class1: #cc272e;
+  --color-severity-class2: #f3b838;
+  --color-severity-class3: #64748b;
+  --color-severity-resolved: #9ca3af;
+  --color-severity-outbreak: #c2410c;
+
+  /* Image-placeholder tints (§3), keyed to hazard type — a separate palette
+     dimension from severity above; kept visually distinct so the two systems
+     are never confused for each other. */
+  --color-hazard-microbial-tint: #e3f0ee;
+  --color-hazard-microbial-fg: #2f7a68;
+  --color-hazard-allergen-tint: #f1eaf7;
+  --color-hazard-allergen-fg: #7a4fa3;
+  --color-hazard-foreign_material-tint: #ece7e1;
+  --color-hazard-foreign_material-fg: #7a6a54;
+  --color-hazard-other-tint: #eceef1;
+  --color-hazard-other-fg: #5b6572;
+
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  background: var(--color-background);
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Never suppress selection on real content — only on UI chrome via this class. */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

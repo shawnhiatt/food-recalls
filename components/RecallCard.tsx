@@ -1,0 +1,74 @@
+import Link from "next/link";
+import type { Id } from "@/convex/_generated/dataModel";
+import { ImagePlaceholder } from "@/components/ImagePlaceholder";
+import { RiskLevelBadge } from "@/components/RiskLevelBadge";
+import { formatDate, formatGeography } from "@/lib/format";
+import { HAZARD_TYPE_LABEL, type HazardType } from "@/lib/copy";
+
+// Card anatomy (SPEC.md §12), scoped to what Phase 1 data actually has:
+// product photo/placeholder, date, geography badge, product name, company,
+// hazard line + icon, plain-language risk level, UPDATE badge. "Retailer
+// when known" and the red impact line need Phase 6 chain matching and Phase
+// 4 outbreak data respectively — not built yet, so not rendered rather than
+// faked. Reason chips need the Phase 2 matcher.
+export type RecallCardData = {
+  _id: Id<"recalls">;
+  recallDate: string;
+  states: string[];
+  productDesc: string;
+  firm: string;
+  hazardType: HazardType;
+  classification: string;
+  lifecycle: "active" | "completed" | "terminated" | "withdrawn" | "corrected";
+  updateHistory: unknown[];
+};
+
+export function RecallCard({ recall }: { recall: RecallCardData }) {
+  const hasUpdates = recall.updateHistory.length > 1;
+
+  return (
+    <Link
+      href={`/recalls/${recall._id}`}
+      className="flex gap-3 rounded-(--radius-base) p-3 active:opacity-80"
+      style={{ background: "var(--color-card)", border: "1px solid var(--color-border)" }}
+    >
+      <ImagePlaceholder
+        hazardType={recall.hazardType}
+        className="h-20 w-20 shrink-0 rounded-(--radius-base)"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-muted-foreground)" }}>
+          <span>{formatDate(recall.recallDate)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{formatGeography(recall.states)}</span>
+          {hasUpdates && (
+            <span
+              className="ml-auto rounded-full border px-2 py-0.5 text-[11px] font-bold"
+              style={{ borderColor: "var(--color-accent-text)", color: "var(--color-accent-text)" }}
+            >
+              UPDATE
+            </span>
+          )}
+        </div>
+        <h3
+          className="mt-1 line-clamp-2 text-sm font-bold"
+          style={{ color: "var(--color-foreground)" }}
+        >
+          {recall.productDesc}
+        </h3>
+        <p className="truncate text-xs" style={{ color: "var(--color-muted-foreground)" }}>
+          {recall.firm}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <RiskLevelBadge classification={recall.classification} lifecycle={recall.lifecycle} />
+          <span
+            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+            style={{ background: "var(--color-secondary)", color: "var(--color-foreground)" }}
+          >
+            {HAZARD_TYPE_LABEL[recall.hazardType]}
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}

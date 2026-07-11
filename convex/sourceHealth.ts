@@ -1,4 +1,4 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // Data-health contract (SPEC.md §10). Every adapter run — success, empty, or
@@ -118,5 +118,27 @@ export const getAll = internalQuery({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("sourceHealth").collect();
+  },
+});
+
+/**
+ * Public, sanitized status for the feed banner and status pill (§10). Omits
+ * `lastError`/`consecutiveFailures` — operator-only detail, not sensitive but
+ * not something the UI needs either. `allCurrent` drives the reassurance
+ * gate: "you're all clear" copy is only permitted when every source is
+ * Current.
+ */
+export const getPublicStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("sourceHealth").collect();
+    return {
+      sources: all.map((s) => ({
+        source: s.source,
+        state: s.state,
+        lastSuccessAt: s.lastSuccessAt,
+      })),
+      allCurrent: all.length > 0 && all.every((s) => s.state === "current"),
+    };
   },
 });

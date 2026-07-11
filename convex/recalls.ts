@@ -1,7 +1,8 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { normalizedRecallFields } from "./schema";
+import { normalizedRecallFields, hazardTypeValidator } from "./schema";
 import type { NormalizedRecall } from "./adapters/types";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4):
@@ -146,5 +147,75 @@ export const getBySourceId = internalQuery({
         q.eq("source", args.source).eq("sourceId", args.sourceId),
       )
       .unique();
+  },
+});
+
+// Public feed (SPEC.md §8/§12): recall data is public government data, so
+// `list`/`get` are unauthenticated — unlike household preferences (§2), no
+// pilot secret gate applies here.
+
+const ARCHIVE_AFTER_DAYS = 365; // §10: non-active + older than 12 months is archived
+
+/** Cutoff as an ISO date string, since `recallDate` sorts lexicographically. */
+function archiveCutoffIso(now: number): string {
+  return new Date(now - ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export const list = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    filters: v.optional(
+      v.object({
+        state: v.optional(v.string()),
+        audience: v.optional(v.union(v.literal("human"), v.literal("pet"))),
+        hazardType: v.optional(hazardTypeValidator),
+        allergen: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const filters = args.filters ?? {};
+    const cutoff = archiveCutoffIso(Date.now());
+
+    const page = await ctx.db
+      .query("recalls")
+      .withIndex("by_recall_date")
+      .order("desc")
+      .filter((q) => {
+        // §10 archive exclusion: active recalls always show; non-active ones
+        // drop out of the default feed once older than the cutoff.
+        let expr = q.or(q.eq(q.field("lifecycle"), "active"), q.gte(q.field("recallDate"), cutoff));
+        if (filters.hazardType) {
+          expr = q.and(expr, q.eq(q.field("hazardType"), filters.hazardType));
+        }
+        if (filters.audience) {
+          expr = q.and(expr, q.eq(q.field("audience"), filters.audience));
+        }
+        return expr;
+      })
+      .paginate(args.paginationOpts);
+
+    // `state`/`allergen` are array-containment checks the filter builder can't
+    // express; applied in JS on the fetched page. Pilot-scale table (hundreds–
+    // low thousands of rows) — a page may come back smaller than requested
+    // when a filter excludes items, which `usePaginatedQuery` handles fine.
+    if (!filters.state && !filters.allergen) return page;
+    return {
+      ...page,
+      page: page.page.filter((doc) => {
+        if (filters.state && !doc.states.includes(filters.state) && !doc.states.includes("US")) {
+          return false;
+        }
+        if (filters.allergen && !doc.allergens.includes(filters.allergen)) return false;
+        return true;
+      }),
+    };
+  },
+});
+
+export const get = query({
+  args: { id: v.id("recalls") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
   },
 });
