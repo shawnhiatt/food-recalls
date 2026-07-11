@@ -89,10 +89,10 @@ export const ingestRecent = internalAction({
 
       // Zero records in a 90-day window when the table already has FDA data is
       // a parse/feed anomaly, not a quiet news week (§10 "Delayed").
-      const existingCount: number = await ctx.runQuery(internal.recalls.countBySource, {
+      const hadData: boolean = await ctx.runQuery(internal.recalls.hasAnyFromSource, {
         source: "fda",
       });
-      const anomaly = totals.fetched === 0 && existingCount > 0;
+      const anomaly = totals.fetched === 0 && hadData;
 
       await ctx.runMutation(internal.sourceHealth.reportRun, {
         source: "fda",

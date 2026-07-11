@@ -11,6 +11,7 @@
 import type * as adapters_fsis from "../adapters/fsis.js";
 import type * as adapters_openfda from "../adapters/openfda.js";
 import type * as adapters_types from "../adapters/types.js";
+import type * as audit from "../audit.js";
 import type * as bookmarks from "../bookmarks.js";
 import type * as crons from "../crons.js";
 import type * as household from "../household.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   "adapters/fsis": typeof adapters_fsis;
   "adapters/openfda": typeof adapters_openfda;
   "adapters/types": typeof adapters_types;
+  audit: typeof audit;
   bookmarks: typeof bookmarks;
   crons: typeof crons;
   household: typeof household;

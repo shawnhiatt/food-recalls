@@ -121,24 +121,47 @@ export const getAll = internalQuery({
   },
 });
 
+const STATE_RANK: Record<HealthState, number> = {
+  current: 0,
+  delayed: 1,
+  unavailable: 2,
+};
+
 /**
  * Public, sanitized status for the feed banner and status pill (§10). Omits
  * `lastError`/`consecutiveFailures` — operator-only detail, not sensitive but
  * not something the UI needs either. `allCurrent` drives the reassurance
  * gate: "you're all clear" copy is only permitted when every source is
  * Current.
+ *
+ * The stored state is only rewritten when a run reports. If the scheduler
+ * stops firing entirely (paused deployment, broken cron), nothing ever
+ * rewrites it — so staleness is recomputed here at read time and the worse
+ * of stored vs. time-based wins. The reassurance gate must fail closed, not
+ * stay green on a dead scheduler.
  */
 export const getPublicStatus = query({
   args: {},
   handler: async (ctx) => {
+    const now = Date.now();
     const all = await ctx.db.query("sourceHealth").collect();
-    return {
-      sources: all.map((s) => ({
+    const sources = all.map((s) => {
+      const timeBased = computeHealthState({
         source: s.source,
-        state: s.state,
+        now,
         lastSuccessAt: s.lastSuccessAt,
-      })),
-      allCurrent: all.length > 0 && all.every((s) => s.state === "current"),
+        consecutiveFailures: s.consecutiveFailures,
+        anomaly: false,
+      });
+      return {
+        source: s.source,
+        state: STATE_RANK[timeBased] > STATE_RANK[s.state] ? timeBased : s.state,
+        lastSuccessAt: s.lastSuccessAt,
+      };
+    });
+    return {
+      sources,
+      allCurrent: sources.length > 0 && sources.every((s) => s.state === "current"),
     };
   },
 });

@@ -12,6 +12,11 @@ import {
 // so PILOT_ACCESS_SECRET (§2) stays server-only and never reaches the
 // client bundle — unlike the Feed/Detail/Saved screens, this one can't be a
 // live-reactive Client Component. Editable in Phase 5 ("Redo setup").
+//
+// force-dynamic: without it, `next build` statically prerenders this page and
+// the summary freezes at deploy time — a re-seed would never show up.
+export const dynamic = "force-dynamic";
+
 export default async function HouseholdPage() {
   const secret = process.env.PILOT_ACCESS_SECRET;
   if (!secret) {
