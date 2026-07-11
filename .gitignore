@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Convex (note: convex/_generated IS committed, per Convex docs)
+.convex/
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Build output
+dist/
+.next/
+out/
+
+# Test / coverage
+coverage/
+
+# Editor & OS
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
