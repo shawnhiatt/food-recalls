@@ -19,4 +19,14 @@ crons.daily(
 // FSIS is near real-time (§3: every 2–4h).
 crons.interval("FSIS recall ingest", { hours: 3 }, internal.ingest.fsis.ingest, {});
 
+// Daily email digests (§9). Runs hourly and sends to each member whose local
+// hour matches their digestHour; empty digests still send (the trust mechanism),
+// with copy gated by source health (§10).
+crons.hourly(
+  "send daily email digests",
+  { minuteUTC: 0 },
+  internal.notifications.sendDigests,
+  {},
+);
+
 export default crons;

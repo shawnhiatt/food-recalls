@@ -166,6 +166,11 @@ export default defineSchema({
     digestEnabled: v.boolean(),
     digestHour: v.number(),
     timezone: v.string(),
+    // Last time a daily digest actually went out to this member (Phase 2).
+    // Guards the hourly digest cron against sending twice in the same local
+    // day; empty digests leave no notificationsSent trace, so this is tracked
+    // directly rather than inferred from the send log.
+    lastDigestAt: v.optional(v.number()),
   }).index("by_member", ["memberId"]),
 
   notificationsSent: defineTable({
@@ -177,6 +182,30 @@ export default defineSchema({
     mode: v.union(v.literal("instant"), v.literal("digest")),
     sentAt: v.number(),
   }).index("by_member_alert", ["memberId", "alertId", "channel"]),
+
+  // Pending items for each member's next daily email digest (Phase 2, §9).
+  // Populated eagerly at alert-processing time so that preference changes —
+  // which re-rank the feed but must NEVER retroactively notify (§7, §17.11) —
+  // can't leak old alerts into a digest: only genuinely new/updated alerts and
+  // closures ever enqueue here. Rows are drained (deleted) when the digest sends.
+  digestQueue: defineTable({
+    memberId: v.id("members"),
+    alertId: v.string(),
+    alertType: v.union(v.literal("recall"), v.literal("outbreak")),
+    contentHash: v.string(), // revision this queue entry covers
+    kind: v.union(v.literal("match"), v.literal("closure")),
+    matchedOn: v.array(v.string()), // reason chips for the digest line
+    confidence: v.union(v.literal("high"), v.literal("possible")),
+    severity: v.union(
+      v.literal("class1"),
+      v.literal("class2"),
+      v.literal("class3"),
+      v.literal("unknown"),
+    ),
+    queuedAt: v.number(),
+  })
+    .index("by_member", ["memberId"])
+    .index("by_member_alert", ["memberId", "alertId"]),
 
   bookmarks: defineTable({
     memberId: v.id("members"),

@@ -1,5 +1,6 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 // Data-health contract (SPEC.md §10). Every adapter run — success, empty, or
 // failure — reports here. The stored state gates all reassurance copy from
@@ -101,13 +102,19 @@ export const reportRun = internalMutation({
       await ctx.db.patch(existing._id, patch);
     }
 
-    // Self-alert on degradation (§10). Phase 0 logs; Phase 2 adds the operator
-    // email via Resend when email infrastructure lands.
+    // Self-alert on degradation (§10): log AND operator email. Only fires on the
+    // current → degraded edge, so a source that stays degraded doesn't re-nag.
     if (state !== "current" && previousState === "current") {
       console.warn(
         `[sourceHealth] ${args.source} degraded: ${previousState} -> ${state}` +
           (args.error ? ` (${args.error})` : ""),
       );
+      await ctx.scheduler.runAfter(0, internal.notifications.sendOperatorAlert, {
+        source: args.source,
+        previousState,
+        state,
+        error: args.error,
+      });
     }
 
     return { state, previousState };

@@ -1,10 +1,15 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import {
   computeHealthState,
   POLLING_INTERVALS_MS,
 } from "../convex/sourceHealth";
 import { setupConvex } from "./helpers";
+
+// A current → degraded transition now schedules the §10 operator self-alert
+// action; fake timers let us drain it so it can't leak a write past teardown.
+beforeEach(() => vi.useFakeTimers({ now: new Date("2026-07-11T12:00:00Z") }));
+afterEach(() => vi.useRealTimers());
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -108,6 +113,7 @@ describe("reportRun mutation", () => {
         source: "fda", outcome: "failure", error: `HTTP 500 (run ${i + 1})`,
       });
     }
+    await t.finishAllScheduledFunctions(vi.runAllTimers); // drain operator alert
     expect(result).toMatchObject({ state: "unavailable" });
 
     const all = await t.query(internal.sourceHealth.getAll, {});
@@ -129,6 +135,7 @@ describe("reportRun mutation", () => {
     const recovered = await t.mutation(internal.sourceHealth.reportRun, {
       source: "cdc", outcome: "success", newRecords: 0,
     });
+    await t.finishAllScheduledFunctions(vi.runAllTimers); // drain operator alert
     expect(recovered).toMatchObject({ state: "current", previousState: "unavailable" });
   });
 
@@ -137,6 +144,7 @@ describe("reportRun mutation", () => {
     const result = await t.mutation(internal.sourceHealth.reportRun, {
       source: "fda_rss", outcome: "success", newRecords: 0, anomaly: true,
     });
+    await t.finishAllScheduledFunctions(vi.runAllTimers); // drain operator alert
     expect(result).toMatchObject({ state: "delayed" });
   });
 });

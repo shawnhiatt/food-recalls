@@ -2,8 +2,10 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { normalizedRecallFields, hazardTypeValidator } from "./schema";
 import type { NormalizedRecall } from "./adapters/types";
+import { isFreshForNotification } from "./lib/matching";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4):
 //   hash unchanged  → touch updatedAt only (no timeline entry, per §9 matrix)
@@ -11,6 +13,13 @@ import type { NormalizedRecall } from "./adapters/types";
 //   new record      → insert with the initial "Recall" timeline entry
 // All functions are internal: Phase 0 has no UI and the pilot exposes nothing
 // publicly (§2).
+
+const CLOSED_LIFECYCLES = new Set([
+  "completed",
+  "terminated",
+  "withdrawn",
+  "corrected",
+]);
 
 /** Human summary of what changed between revisions — powers the Timeline view. */
 export function diffSummary(prev: NormalizedRecall, next: NormalizedRecall): string {
@@ -73,7 +82,7 @@ export const upsertBatch = internalMutation({
         .unique();
 
       if (existing === null) {
-        await ctx.db.insert("recalls", {
+        const id = await ctx.db.insert("recalls", {
           ...record,
           updateHistory: [
             {
@@ -87,6 +96,14 @@ export const upsertBatch = internalMutation({
           updatedAt: now,
         });
         counts.inserted++;
+        // Notify only on recently-published recalls (§9). The recency guard
+        // also keeps the historical backfill from scheduling ~29k dispatches.
+        if (isFreshForNotification(record.recallDate, now)) {
+          await ctx.scheduler.runAfter(0, internal.notifications.dispatchForRecall, {
+            recallId: id,
+            event: "new",
+          });
+        }
         continue;
       }
 
@@ -96,8 +113,9 @@ export const upsertBatch = internalMutation({
         continue;
       }
 
-      // Material update: new revision. Phase 2 hooks matching + notification
-      // dispatch here (decision matrix §9, "Material update" rows).
+      // Material update: new revision (§9 "Material update" rows). A transition
+      // INTO a closed lifecycle is a closure event (digest closure line for
+      // previously-notified members only); anything else re-evaluates as new.
       const entry = {
         date: new Date(now).toISOString().slice(0, 10),
         label: `Update ${existing.updateHistory.length}`,
@@ -110,6 +128,13 @@ export const upsertBatch = internalMutation({
         updatedAt: now,
       });
       counts.materialUpdates++;
+      const becameClosed =
+        !CLOSED_LIFECYCLES.has(existing.lifecycle) &&
+        CLOSED_LIFECYCLES.has(record.lifecycle);
+      await ctx.scheduler.runAfter(0, internal.notifications.dispatchForRecall, {
+        recallId: existing._id,
+        event: becameClosed ? "closure" : "material",
+      });
     }
 
     return counts;

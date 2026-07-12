@@ -102,7 +102,10 @@ convex/
                        project's center of gravity; tested with fixtures
   lib/                 Enrichment, state normalization, lifecycle, content hash,
                        access.ts (pilot secret gate for household.ts)
-  recalls.ts           Upsert (internal) + public list/get (Phase 1 feed)
+  recalls.ts           Upsert (internal) + public list/get (Phase 1 feed);
+                       schedules notification dispatch on new/updated recalls
+  notifications.ts     Dispatch (§9): matcher × decision matrix, per-revision
+                       dedupe, instant email + daily digest, operator alerts
   sourceHealth.ts      Data-health contract (SPEC.md §10) + public status query
   household.ts         Secret-gated read-only household summary (SPEC.md §2)
   bookmarks.ts         Public bookmark list/toggle (single-household pilot)
@@ -145,7 +148,19 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       reach `<head>` at parse time due to a Next.js 15 streaming-metadata
       quirk on client-rendered dynamic routes (low-stakes — this is an
       unlisted private pilot, §2).
-- [ ] **Phase 2** — Email notifications (matching engine, instant + daily digest)
+- [x] **Phase 2** — Email notifications (matching engine, instant + daily digest).
+      Backend shipped: the §7 matcher + §9 decision matrix as pure functions
+      (`convex/lib/matching.ts`), stateful dispatch with per-revision dedupe and
+      an eager digest queue (`convex/notifications.ts`), Resend transport
+      (`convex/lib/email.ts`, no-ops without `RESEND_API_KEY`), the daily digest
+      with the §10 reassurance gate (`convex/lib/digest.ts`, sends even when
+      empty), and operator self-alert email on source-health degradation. Every
+      §9 matrix row, the hard-floor/category-gate precedence, replay
+      idempotency, and both empty-digest variants are covered by tests. Set
+      `RESEND_API_KEY`/`RESEND_FROM`/`OPERATOR_EMAIL`/`APP_BASE_URL` in the
+      Convex env (see `.env.example`) to enable live sending. Deferred: the
+      feed's "For your household" personalized section/reason chips (UI wiring
+      of the same matcher) and web push (Phase 3).
 - [ ] **Phase 3** — Web push notifications
 - [ ] **Phase 4** — CDC outbreaks
 - [ ] **Phase 5** — Accounts, onboarding, household UI — the public gate

@@ -18,6 +18,9 @@ describe("sourceHealth.getPublicStatus", () => {
   });
 
   test("allCurrent is true only when every reporting source is current", async () => {
+    // Fake timers so the degradation's scheduled operator-alert action (§10)
+    // can be drained rather than leaking a write past teardown.
+    vi.useFakeTimers({ now: new Date("2026-07-11T12:00:00Z") });
     const t = setupConvex();
     await t.mutation(internal.sourceHealth.reportRun, { source: "fda", outcome: "success" });
     await t.mutation(internal.sourceHealth.reportRun, { source: "fsis", outcome: "success" });
@@ -35,6 +38,7 @@ describe("sourceHealth.getPublicStatus", () => {
         error: "timeout",
       });
     }
+    await t.finishAllScheduledFunctions(vi.runAllTimers); // drain operator alert
     status = await t.query(api.sourceHealth.getPublicStatus, {});
     expect(status.allCurrent).toBe(false);
 

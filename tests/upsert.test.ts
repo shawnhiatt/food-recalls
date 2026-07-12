@@ -1,15 +1,26 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import { normalizeBatch, type NormalizedRecall } from "../convex/adapters/types";
 import { normalizeOpenFdaRecord } from "../convex/adapters/openfda";
 import { setupConvex } from "./helpers";
 import page from "./fixtures/openfda/enforcement-page.json";
 
+// upsertBatch now schedules Phase-2 notification dispatch on fresh inserts and
+// material updates (§9). Pin the clock so the (May-dated) fixtures are never
+// "fresh" — keeping these hash-stability tests about revisioning, not
+// notifications — and drain any scheduled dispatch so it can't leak a write
+// past teardown.
+beforeEach(() => vi.useFakeTimers({ now: new Date("2026-07-11T12:00:00Z") }));
+afterEach(() => vi.useRealTimers());
+
 function normalizedFixture(): NormalizedRecall[] {
   const { records, skipped } = normalizeBatch(page.results, normalizeOpenFdaRecord);
   expect(skipped).toHaveLength(0);
   return records;
 }
+
+const drain = (t: ReturnType<typeof setupConvex>) =>
+  t.finishAllScheduledFunctions(vi.runAllTimers);
 
 describe("upsertBatch revisioning (SPEC.md §4, §14 hash stability)", () => {
   test("first ingest inserts everything with an initial timeline entry", async () => {
@@ -62,6 +73,7 @@ describe("upsertBatch revisioning (SPEC.md §4, §14 hash stability)", () => {
     const counts = await t.mutation(internal.recalls.upsertBatch, {
       records: [result.record],
     });
+    await drain(t); // material update schedules dispatchForRecall
     expect(counts).toEqual({ inserted: 0, materialUpdates: 1, touched: 0 });
 
     const doc = await t.query(internal.recalls.getBySourceId, {
