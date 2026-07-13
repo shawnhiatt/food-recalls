@@ -392,6 +392,34 @@ describe("material updates (§9)", () => {
     expect(sent).toHaveLength(2);
     expect(sent.map((s) => s.contentHash).sort()).toEqual(["rev-1", "rev-2"]);
   });
+
+  test("a material update to an already-closed recall never notifies (§17.12, §10)", async () => {
+    const t = setupConvex();
+    // Hard-floor-grade household (Class I + allergen) with everything opted in
+    // so any leak through the guard would be loud.
+    await seedHousehold(
+      t,
+      { states: ["NC"], allergens: ["peanuts"] },
+      {
+        emailOptIn: true,
+        pushOptIn: true,
+        pushSubscription: TEST_PUSH_SUBSCRIPTION,
+        urgencyThreshold: "everything",
+      },
+    );
+    // Already completed — e.g. openFDA touched a record it had closed long ago.
+    const recallId = await insertRecall(t, {
+      classification: "Class I",
+      states: ["NC"],
+      allergens: ["peanuts"],
+      lifecycle: "completed",
+      contentHash: "rev-2",
+    });
+
+    await dispatch(t, { recallId, event: "material" });
+    expect(await sentRows(t)).toHaveLength(0); // no instant email or push
+    expect(await queueRows(t)).toHaveLength(0); // no digest line either
+  });
 });
 
 describe("closures (§9 lifecycle rows)", () => {

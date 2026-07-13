@@ -65,6 +65,32 @@ export type UpsertCounts = {
   touched: number;
 };
 
+/**
+ * Structural equality for `raw` source records. Hash changed + raw identical
+ * means OUR code changed (enrichment regexes, hash inputs), not the source —
+ * see the silent-refresh branch in upsertBatch. Convex may not preserve object
+ * key order across storage round-trips, so compare structurally, not by
+ * JSON.stringify.
+ */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((value, i) => deepEqual(value, b[i]));
+  }
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(b, key) &&
+      deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+  );
+}
+
 export const upsertBatch = internalMutation({
   args: {
     records: v.array(v.object(normalizedRecallFields)),
@@ -113,6 +139,18 @@ export const upsertBatch = internalMutation({
         continue;
       }
 
+      // Hash changed but the raw source record is identical: OUR code changed
+      // (enrichment regexes, hash inputs), not the source. Refresh the stored
+      // tags and hash silently — no timeline entry, no dispatch. Without this,
+      // re-running ingest after an enrichment improvement would fabricate
+      // "material updates" across history (§14 hash stability) and schedule
+      // notification dispatch for thousands of old records.
+      if (deepEqual(existing.raw, record.raw)) {
+        await ctx.db.patch(existing._id, { ...record, updatedAt: now });
+        counts.touched++;
+        continue;
+      }
+
       // Material update: new revision (§9 "Material update" rows). A transition
       // INTO a closed lifecycle is a closure event (digest closure line for
       // previously-notified members only); anything else re-evaluates as new.
@@ -131,10 +169,20 @@ export const upsertBatch = internalMutation({
       const becameClosed =
         !CLOSED_LIFECYCLES.has(existing.lifecycle) &&
         CLOSED_LIFECYCLES.has(record.lifecycle);
-      await ctx.scheduler.runAfter(0, internal.notifications.dispatchForRecall, {
-        recallId: existing._id,
-        event: becameClosed ? "closure" : "material",
-      });
+      if (becameClosed) {
+        await ctx.scheduler.runAfter(0, internal.notifications.dispatchForRecall, {
+          recallId: existing._id,
+          event: "closure",
+        });
+      } else if (!CLOSED_LIFECYCLES.has(record.lifecycle)) {
+        await ctx.scheduler.runAfter(0, internal.notifications.dispatchForRecall, {
+          recallId: existing._id,
+          event: "material",
+        });
+      }
+      // Still-closed recall edited again → timeline entry only: resolved/
+      // withdrawn recalls never notify (§17.12) and non-active records are
+      // excluded from matching (§10).
     }
 
     return counts;

@@ -176,6 +176,16 @@ export const dispatchForRecall = internalMutation({
       return { dispatched: 0, reason: "stale-new" as const };
     }
 
+    // §17.12 / §10: a material update to an already-closed recall is timeline
+    // only — resolved/withdrawn recalls never notify, and non-active records
+    // are excluded from matching. Transitions INTO a closed lifecycle arrive
+    // as their own 'closure' event and are handled below; this guards the
+    // closed→closed edit that upsertBatch no longer schedules (defense in
+    // depth, like the freshness guard above).
+    if (event === "material" && recall.lifecycle !== "active") {
+      return { dispatched: 0, reason: "closed-material" as const };
+    }
+
     const households = await ctx.db.query("households").collect();
     let dispatched = 0;
 

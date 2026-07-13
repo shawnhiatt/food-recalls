@@ -130,6 +130,11 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       the §14 enrichment spot-check passed on a 120-record stratified sample —
       allergen recall 96.8% (≥95% required), audience accuracy 100% (≥90%).
       Method and findings in [docs/enrichment-spot-check.md](./docs/enrichment-spot-check.md).
+      Hash stability hardened 2026-07-12: a content-hash change with an
+      identical raw source record (i.e. our enrichment/hash code changed, not
+      the source) now refreshes tags silently — no fabricated revision, no
+      timeline noise, no notification dispatch — so enrichment improvements
+      plus a backfill re-run can never trigger an alert storm.
 - [ ] **Phase 1** — Read-only PWA dashboard (feed, detail, timeline, bookmarks).
       UI shipped and verified: Core-tier PWA scaffold, public Convex API
       layer, all four screens tested against live data, Lighthouse
@@ -158,9 +163,12 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       §9 matrix row, the hard-floor/category-gate precedence, replay
       idempotency, and both empty-digest variants are covered by tests. Set
       `RESEND_API_KEY`/`RESEND_FROM`/`OPERATOR_EMAIL`/`APP_BASE_URL` in the
-      Convex env (see `.env.example`) to enable live sending. Deferred: the
-      feed's "For your household" personalized section/reason chips (UI wiring
-      of the same matcher) and web push (Phase 3).
+      Convex env (see `.env.example`) to enable live sending. Fixed 2026-07-12:
+      a material update to an already-closed recall (closed→closed source
+      edit) is now timeline-only — it never dispatches instant or digest
+      notifications, per SPEC.md §17.12 and the §10 archive exclusion.
+      Deferred: the feed's "For your household" personalized section/reason
+      chips (UI wiring of the same matcher) and web push (Phase 3).
 - [ ] **Phase 3** — Web push notifications. Shipped: VAPID Web Push end to
       end — service worker `push`/`notificationclick` handlers (`app/sw.ts`)
       with lock-screen-safe payloads (`convex/lib/push.ts`: product name +
