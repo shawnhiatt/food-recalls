@@ -104,6 +104,8 @@ convex/
                        access.ts (pilot secret gate for household.ts)
   recalls.ts           Upsert (internal) + public list/get (Phase 1 feed);
                        schedules notification dispatch on new/updated recalls
+  press.ts             FDA press-release enrichment: photo/risk-group/notice-URL
+                       patches onto matching recalls; relink for late API records
   notifications.ts     Dispatch (§9): matcher × decision matrix, per-revision
                        dedupe, instant email + daily digest, operator alerts
   sourceHealth.ts      Data-health contract (SPEC.md §10) + public status query
@@ -144,15 +146,19 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       read-time source-health staleness (the §10 gate now fails closed on a
       dead scheduler), footer + first-run disclaimers, all-clear empty state
       carries the last-checked timestamp, Household tab renders dynamically.
-      Still open: FDA RSS/press ingest for images + risk-group text and the
-      Open Food Facts fallback (cards show the hazard-tinted placeholder
-      illustration for every recall until that lands; this also replaces the
-      openFDA detail link, which currently points at the raw API record);
-      FSIS upstream 403 (see Data sources above); cross-browser testing
-      beyond Chromium; the Detail page's per-recall SEO metadata doesn't
-      reach `<head>` at parse time due to a Next.js 15 streaming-metadata
-      quirk on client-rendered dynamic routes (low-stakes — this is an
-      unlisted private pilot, §2).
+      FDA RSS/press ingest landed 2026-07-12 (`convex/ingest/fdaRss.ts` +
+      `convex/press.ts`): every 3h, new press pages are fetched and their
+      product photo, "who's at risk" risk groups, and real notice URL enrich
+      the matching enforcement records (matched by company name + date
+      window; unmatched items relink on later runs since enforcement records
+      lag press releases by weeks). Open Food Facts by-UPC image fallback
+      included; cards/detail render the resolved image object-contain in the
+      hazard-tinted container, placeholder otherwise. Verified end to end
+      against the live feed. Still open: FSIS upstream 403 (see Data sources
+      above); cross-browser testing beyond Chromium; the Detail page's
+      per-recall SEO metadata doesn't reach `<head>` at parse time due to a
+      Next.js 15 streaming-metadata quirk on client-rendered dynamic routes
+      (low-stakes — this is an unlisted private pilot, §2).
 - [x] **Phase 2** — Email notifications (matching engine, instant + daily digest).
       Backend shipped: the §7 matcher + §9 decision matrix as pure functions
       (`convex/lib/matching.ts`), stateful dispatch with per-revision dedupe and

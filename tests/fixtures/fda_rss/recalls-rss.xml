@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" xml:base="http://www.fda.gov/">
+  <channel>
+    <title>Food and Drugs Administration--Recalls/Safety Alerts</title>
+    <link>http://www.fda.gov/</link>
+    <description/>
+    <language>en</language>
+
+    <item>
+  <title>Faysu Inc., dba Yusol International Foods Recalls OLA-OLA POUNDED YAM Due to Undeclared Milk Allergen</title>
+  <link>http://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/faysu-inc-dba-yusol-international-foods-recalls-ola-ola-pounded-yam-due-undeclared-milk-allergen</link>
+  <description>Fayus Inc., doing business as Yusol International Foods (Sacramento, CA) is voluntarily recalling OLA-OLA POUNDED YAM because the product may contain undeclared milk in the form of sodium caseinate, which is not declared on the label.  </description>
+  <pubDate>Mon, 06 Jul 2026 13:49:00 EDT</pubDate>
+    <dc:creator>FDA</dc:creator>
+    <guid isPermaLink="true">http://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/faysu-inc-dba-yusol-international-foods-recalls-ola-ola-pounded-yam-due-undeclared-milk-allergen</guid>
+    </item>
+<item>
+  <title>Frutas y Hortalizas del Sur S.A. Initiates Recall of Frozen GreenWise Organic IQF Blueberries Due to Potential E. coli O145 Contamination</title>
+  <link>http://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/frutas-y-hortalizas-del-sur-sa-initiates-recall-frozen-greenwise-organic-iqf-blueberries-due</link>
+  <description>July 3, 2026 – Frutas y Hortalizas del Sur S.A., San Carlos, Chile is recalling frozen GreenWise Organic IQF Blueberries 10 oz. Because it may be contaminated with Escherichia coli O145:H28 (E. coli O145).</description>
+  <pubDate>Fri, 03 Jul 2026 13:06:00 EDT</pubDate>
+    <dc:creator>FDA</dc:creator>
+    <guid isPermaLink="true">http://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/frutas-y-hortalizas-del-sur-sa-initiates-recall-frozen-greenwise-organic-iqf-blueberries-due</guid>
+    </item>
+<item>
+  <title>Voluntary Recall of Two Lots of PEDIGREE® Can High Protein Chopped Chicken &amp; Duck Flavor Wet  Dog Food Due to Potential Fraudulent Distribution of Product Which May Contain Foreign Material  </title>
+  <link>http://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/voluntary-recall-two-lots-pedigreer-can-high-protein-chopped-chicken-duck-flavor-wet-dog-food-due</link>
+  <description>FRANKLIN, Tenn., (July 2, 2026): Mars Petcare US, Inc. is issuing a voluntary recall for two lots of PEDIGREE® Can High Protein Chopped Chicken &amp;amp; Duck Flavor 13.2oz for dogs.  </description>
+  <pubDate>Thu, 02 Jul 2026 20:55:00 EDT</pubDate>
+    <dc:creator>FDA</dc:creator>
+    <guid isPermaLink="true">http://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/voluntary-recall-two-lots-pedigreer-can-high-protein-chopped-chicken-duck-flavor-wet-dog-food-due</guid>
+    </item>
+<item>
+  <title>Item With No Link Should Be Skipped</title>
+  <description>This item is malformed: no link and no guid.</description>
+  <pubDate>Thu, 02 Jul 2026 09:00:00 EDT</pubDate>
+    <dc:creator>FDA</dc:creator>
+    </item>
+  </channel>
+</rss>

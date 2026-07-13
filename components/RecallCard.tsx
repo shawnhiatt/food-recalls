@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
-import { ImagePlaceholder } from "@/components/ImagePlaceholder";
+import { RecallImage } from "@/components/RecallImage";
 import { RiskLevelBadge } from "@/components/RiskLevelBadge";
 import { formatDate, formatGeography } from "@/lib/format";
 import { HAZARD_TYPE_LABEL, type HazardType } from "@/lib/copy";
@@ -21,6 +21,7 @@ export type RecallCardData = {
   classification: string;
   lifecycle: "active" | "completed" | "terminated" | "withdrawn" | "corrected";
   updateHistory: unknown[];
+  imageUrl?: string;
 };
 
 export function RecallCard({ recall }: { recall: RecallCardData }) {
@@ -32,8 +33,11 @@ export function RecallCard({ recall }: { recall: RecallCardData }) {
       className="flex gap-3 rounded-(--radius-base) p-3 active:opacity-80"
       style={{ background: "var(--color-card)", border: "1px solid var(--color-border)" }}
     >
-      <ImagePlaceholder
+      {/* Decorative on cards: the product name renders right beside it. */}
+      <RecallImage
+        imageUrl={recall.imageUrl}
         hazardType={recall.hazardType}
+        alt=""
         className="h-20 w-20 shrink-0 rounded-(--radius-base)"
       />
       <div className="min-w-0 flex-1">

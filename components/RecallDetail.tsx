@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { ImagePlaceholder } from "@/components/ImagePlaceholder";
+import { RecallImage } from "@/components/RecallImage";
 import { RiskLevelBadge } from "@/components/RiskLevelBadge";
 import { Timeline } from "@/components/Timeline";
 import { BookmarkButton } from "@/components/BookmarkButton";
@@ -51,7 +51,13 @@ export function RecallDetail() {
 
   return (
     <main className="pb-6">
-      <ImagePlaceholder hazardType={recall.hazardType} className="h-48 w-full" />
+      <RecallImage
+        imageUrl={recall.imageUrl}
+        hazardType={recall.hazardType}
+        alt={`Product photo for ${recall.productDesc}`}
+        className="h-48 w-full"
+        priority
+      />
 
       <div className="px-4 pt-4">
         <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-muted-foreground)" }}>

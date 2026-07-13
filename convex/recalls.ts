@@ -139,6 +139,20 @@ export const upsertBatch = internalMutation({
         continue;
       }
 
+      // Press enrichment (convex/press.ts) must survive API re-ingest:
+      // imageUrl/imageSource survive because adapters omit those keys, but
+      // riskGroups and sourceUrl are always emitted and would clobber the
+      // press-derived values. riskGroups unions (over-alerting bias, §4);
+      // a synthetic api.fda.gov link never replaces a real notice URL (§3).
+      const preserved = {
+        riskGroups: [...new Set([...existing.riskGroups, ...record.riskGroups])],
+        sourceUrl:
+          record.sourceUrl.includes("api.fda.gov") &&
+          !existing.sourceUrl.includes("api.fda.gov")
+            ? existing.sourceUrl
+            : record.sourceUrl,
+      };
+
       // Hash changed but the raw source record is identical: OUR code changed
       // (enrichment regexes, hash inputs), not the source. Refresh the stored
       // tags and hash silently — no timeline entry, no dispatch. Without this,
@@ -146,7 +160,7 @@ export const upsertBatch = internalMutation({
       // "material updates" across history (§14 hash stability) and schedule
       // notification dispatch for thousands of old records.
       if (deepEqual(existing.raw, record.raw)) {
-        await ctx.db.patch(existing._id, { ...record, updatedAt: now });
+        await ctx.db.patch(existing._id, { ...record, ...preserved, updatedAt: now });
         counts.touched++;
         continue;
       }
@@ -162,6 +176,7 @@ export const upsertBatch = internalMutation({
       };
       await ctx.db.patch(existing._id, {
         ...record,
+        ...preserved,
         updateHistory: [...existing.updateHistory, entry],
         updatedAt: now,
       });
@@ -224,6 +239,47 @@ export const getBySourceId = internalQuery({
         q.eq("source", args.source).eq("sourceId", args.sourceId),
       )
       .unique();
+  },
+});
+
+// --- Open Food Facts image fallback (SPEC.md §3 photo strategy, rung 2) ---
+
+const IMAGE_FALLBACK_WINDOW_DAYS = 45;
+
+/**
+ * Recent recalls with UPC-like product codes but no image yet — candidates
+ * for the Open Food Facts lookup in the fda_rss ingest run. Only the feed's
+ * visible head is worth external lookups; older cards keep the placeholder.
+ */
+export const recentWithoutImage = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, args) => {
+    const cutoff = new Date(Date.now() - IMAGE_FALLBACK_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const recent = await ctx.db
+      .query("recalls")
+      .withIndex("by_recall_date", (q) => q.gte("recallDate", cutoff))
+      .order("desc")
+      .take(200);
+    return recent
+      .filter((doc) => !doc.imageUrl && doc.productCodes.length > 0)
+      .slice(0, args.limit)
+      .map((doc) => ({ _id: doc._id, productCodes: doc.productCodes.slice(0, 3) }));
+  },
+});
+
+/** Set an Open Food Facts image, unless a (better) press image landed first. */
+export const applyImageFallback = internalMutation({
+  args: { recallId: v.id("recalls"), imageUrl: v.string() },
+  handler: async (ctx, args) => {
+    const recall = await ctx.db.get(args.recallId);
+    if (!recall || recall.imageUrl) return;
+    await ctx.db.patch(args.recallId, {
+      imageUrl: args.imageUrl,
+      imageSource: "openfoodfacts",
+      updatedAt: Date.now(),
+    });
   },
 });
 

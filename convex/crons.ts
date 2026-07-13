@@ -19,6 +19,16 @@ crons.daily(
 // FSIS is near real-time (§3: every 2–4h).
 crons.interval("FSIS recall ingest", { hours: 3 }, internal.ingest.fsis.ingest, {});
 
+// FDA press releases (§3: every 2–4h) — photos, risk-group text, and real
+// notice URLs enriching the enforcement records; plus the Open Food Facts
+// image fallback.
+crons.interval(
+  "FDA press release ingest",
+  { hours: 3 },
+  internal.ingest.fdaRss.ingest,
+  {},
+);
+
 // Daily email digests (§9). Runs hourly and sends to each member whose local
 // hour matches their digestHour; empty digests still send (the trust mechanism),
 // with copy gated by source health (§10).

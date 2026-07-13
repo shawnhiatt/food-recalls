@@ -219,6 +219,25 @@ export default defineSchema({
     .index("by_member", ["memberId"])
     .index("by_member_alert", ["memberId", "alertId"]),
 
+  // One row per FDA press-release RSS item (Phase 1 §3/§4). Press items
+  // enrich matching enforcement records (photo, risk groups, notice URL) —
+  // they are not recalls themselves. Unmatched relevant items are retried on
+  // later ingest runs (press releases precede API records by days-to-weeks).
+  pressItems: defineTable({
+    guid: v.string(),
+    url: v.string(),
+    title: v.string(),
+    publishedAt: v.string(), // ISO date from pubDate
+    companyName: v.string(),
+    productType: v.string(), // e.g. "Food & Beverages" — non-food items recorded but never matched
+    relevant: v.boolean(),
+    imageUrl: v.optional(v.string()),
+    riskGroups: v.array(v.string()),
+    matchedRecallIds: v.array(v.id("recalls")),
+    fetchedAt: v.number(),
+    lastMatchAttemptAt: v.number(),
+  }).index("by_guid", ["guid"]),
+
   bookmarks: defineTable({
     memberId: v.id("members"),
     alertId: v.string(),
