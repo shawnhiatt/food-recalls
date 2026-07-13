@@ -67,4 +67,40 @@ describe("bookmarks.toggle / list", () => {
     const t = setupConvex();
     expect(await t.query(api.bookmarks.list, {})).toEqual([]);
   });
+
+  test("outbreak bookmarks resolve alongside recall bookmarks (Phase 4)", async () => {
+    const t = setupConvex();
+    await seedHouseholdWithMember(t);
+    const outbreakId = await t.run((ctx) =>
+      ctx.db.insert("outbreaks", {
+        source: "cdc",
+        sourceId: "ecoli/outbreaks/test-outbreak",
+        title: "E. coli Outbreak Linked to Frozen Blueberries",
+        pathogen: "E. coli",
+        suspectedFood: "Frozen Blueberries",
+        states: ["FL", "GA"],
+        status: "active",
+        caseCount: 12,
+        hospitalizations: 4,
+        riskGroups: [],
+        sourceUrl: "https://www.cdc.gov/ecoli/outbreaks/test-outbreak/index.html",
+        raw: {},
+        contentHash: "hash-outbreak-1",
+        publishedAt: "2026-07-06",
+        updateHistory: [],
+        firstSeenAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+
+    const added = await t.mutation(api.bookmarks.toggle, { alertId: outbreakId, alertType: "outbreak" });
+    expect(added).toEqual({ bookmarked: true });
+
+    const listed = await t.query(api.bookmarks.list, {});
+    expect(listed).toHaveLength(1);
+    const entry = listed[0]!;
+    expect(entry.alertType).toBe("outbreak");
+    if (entry.alertType !== "outbreak") throw new Error("expected an outbreak entry");
+    expect(entry.pathogen).toBe("E. coli");
+  });
 });

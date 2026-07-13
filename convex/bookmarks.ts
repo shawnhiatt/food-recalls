@@ -25,15 +25,19 @@ export const list = query({
       .withIndex("by_member", (q) => q.eq("memberId", member._id))
       .collect();
 
-    // Outbreak bookmarks aren't possible yet (outbreaks arrive Phase 4); skip
-    // rather than crash if one somehow exists.
     const entries = await Promise.all(
-      bookmarks
-        .filter((b) => b.alertType === "recall")
-        .map(async (b) => {
-          const recall = await ctx.db.get(b.alertId as Id<"recalls">);
-          return recall ? { ...recall, bookmarkId: b._id, bookmarkedAt: b.createdAt } : null;
-        }),
+      bookmarks.map(async (b) => {
+        if (b.alertType === "outbreak") {
+          const outbreak = await ctx.db.get(b.alertId as Id<"outbreaks">);
+          return outbreak
+            ? { ...outbreak, alertType: "outbreak" as const, bookmarkId: b._id, bookmarkedAt: b.createdAt }
+            : null;
+        }
+        const recall = await ctx.db.get(b.alertId as Id<"recalls">);
+        return recall
+          ? { ...recall, alertType: "recall" as const, bookmarkId: b._id, bookmarkedAt: b.createdAt }
+          : null;
+      }),
     );
 
     return entries

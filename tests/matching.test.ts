@@ -94,6 +94,74 @@ describe("matchRecall — dimensions (§7)", () => {
   });
 });
 
+// Outbreak-shaped alerts (Phase 4, §14: "risk-group matching test passes").
+// MatchableAlert is already generic across recalls/outbreaks — outbreaks
+// just have no firm/allergens, and carry their "keyword" surface in
+// suspectedFood rather than productDesc (§7: "+ suspectedFood for outbreaks").
+const baseOutbreak = (overrides: Partial<MatchableAlert> = {}): MatchableAlert => ({
+  audience: "human",
+  states: [],
+  productDesc: "",
+  firm: "",
+  allergens: [],
+  riskGroups: [],
+  suspectedFood: "Frozen Blueberries",
+  ...overrides,
+});
+
+describe("matchRecall — outbreak-shaped alerts (§7, Phase 4)", () => {
+  test("state match works the same as for recalls", () => {
+    const r = matchRecall(baseOutbreak({ states: ["FL", "GA"] }), basePrefs({ states: ["FL"] }));
+    expect(r.matched).toBe(true);
+    expect(r.matchedOn).toContain("state");
+  });
+
+  test("nationwide outbreak matches any household", () => {
+    const r = matchRecall(baseOutbreak({ states: ["US"] }), basePrefs({ states: ["TX"] }));
+    expect(r.matchedOn).toContain("state");
+  });
+
+  test("keyword match against suspectedFood (outbreaks have no productDesc)", () => {
+    const r = matchRecall(
+      baseOutbreak({ suspectedFood: "Powdered Infant Formula" }),
+      basePrefs({ states: [], keywords: ["infant formula"] }),
+    );
+    expect(r.matchedOn).toContain("keyword");
+  });
+
+  test("risk-group match works the same as for recalls (thin outbreak data still matches)", () => {
+    const prefs = basePrefs({
+      states: [],
+      members: [{ ageBand: "older_adult" }],
+    });
+    const r = matchRecall(
+      baseOutbreak({ riskGroups: ["older_adult", "immunocompromised"] }),
+      prefs,
+    );
+    expect(r.hasRiskGroupMatch).toBe(true);
+    expect(r.matchedOn).toContain("risk_group");
+  });
+
+  test("category gate still applies: outbreaks category disabled → inert", () => {
+    const r = matchRecall(
+      baseOutbreak({ states: ["NC"] }),
+      basePrefs({ categories: { humanFood: false, petFood: true, outbreaks: true } }),
+    );
+    // Outbreaks are always audience 'human' — gated by humanFood like any
+    // other human-food alert (the outbreaks category toggle in §7 governs
+    // whether outbreak-type alerts are matched at all upstream of the
+    // matcher; matchRecall itself only knows audience-based gating).
+    expect(r.categoryEnabled).toBe(false);
+    expect(r.matched).toBe(false);
+  });
+
+  test("no matching dimension on a thin outbreak → no match, no crash", () => {
+    const r = matchRecall(baseOutbreak({ suspectedFood: "Moringa Capsules" }), basePrefs({ states: [] }));
+    expect(r.matched).toBe(false);
+    expect(r.matchedOn).toEqual([]);
+  });
+});
+
 describe("matchRecall — category gate is absolute (§7, §17.6)", () => {
   test("pet-food recall is inert when petFood is disabled — even on a strong match", () => {
     const r = matchRecall(

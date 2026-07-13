@@ -41,6 +41,10 @@
   --color-hazard-foreign_material-fg: #7a6a54;
   --color-hazard-other-tint: #eceef1;
   --color-hazard-other-fg: #5b6572;
+  /* Outbreaks (§12, Phase 4) have no hazardType — a dedicated tint keyed to
+     the same deep-orange family as --color-severity-outbreak. */
+  --color-hazard-outbreak-tint: #fce8db;
+  --color-hazard-outbreak-fg: #c2410c;
 
   --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
 }

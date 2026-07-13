@@ -35,7 +35,7 @@ when it can prove its data sources are current. See SPEC.md §10.
 | openFDA Food Enforcement API | Packaged foods, produce, supplements, pet food | Daily |
 | USDA FSIS Recall API | Meat, poultry, egg products | Every 3 hours ⚠️ |
 | FDA Recalls RSS / press releases | Images + risk-group text (Phase 1) | Every 3 hours |
-| CDC outbreak investigations | Foodborne outbreaks (Phase 4) | Every 3 hours |
+| CDC outbreak investigations | Foodborne outbreaks (Phase 4) | Every 3 hours ⚠️ |
 
 > ⚠️ **FSIS is currently blocked upstream** (verified 2026-07-11): fsis.usda.gov
 > answers HTTP 403 to every non-browser client — curl, PowerShell, and Convex's
@@ -46,6 +46,19 @@ when it can prove its data sources are current. See SPEC.md §10.
 > degraded and the app refuses all-clear reassurance copy — the §10 contract
 > working as designed. Meat/poultry/egg-product recalls are missing from the
 > feed in the meantime.
+
+> ⚠️ **CDC is also currently blocked upstream** (verified 2026-07-13, same
+> failure mode as FSIS above): cdc.gov answers HTTP 403 to Convex's `fetch`
+> even with a full browser-like header set, while the `www.cdc.gov` pages
+> render fine in an actual browser — the same TLS-fingerprint-level bot
+> detection, not a fixable header. The adapter and ingest pipeline
+> (`convex/adapters/cdc.ts`, `convex/ingest/cdc.ts`) are built and fixture-
+> tested against real captured CDC markup and verified working end-to-end
+> against a manually-seeded record (see Phase 4 below); only the live 3h cron
+> fetch is currently blocked. `sourceHealth` correctly reports `cdc` as
+> degraded in the meantime — verified live: the feed banner read "Coverage
+> incomplete — USDA meat & poultry data & CDC outbreak data haven't updated
+> recently."
 
 > **Disclaimer:** Data comes from openFDA, FSIS, and CDC. openFDA states its data is
 > unvalidated and not intended as a public alerting source. This project is not an
@@ -98,23 +111,27 @@ convex/
   schema.ts            Convex schema (SPEC.md §6)
   crons.ts             Scheduled ingest (SPEC.md §4)
   ingest/              Per-source actions: fetch → normalize → enrich → upsert
-  adapters/            Pure normalization per source (openFDA, FSIS) — the
+  adapters/            Pure normalization per source (openFDA, FSIS, CDC) — the
                        project's center of gravity; tested with fixtures
   lib/                 Enrichment, state normalization, lifecycle, content hash,
                        access.ts (pilot secret gate for household.ts)
   recalls.ts           Upsert (internal) + public list/get (Phase 1 feed);
                        schedules notification dispatch on new/updated recalls
+  outbreaks.ts         CDC outbreak upsert (internal) + public list/get (Phase 4);
+                       notification dispatch intentionally not yet wired, see below
   press.ts             FDA press-release enrichment: photo/risk-group/notice-URL
                        patches onto matching recalls; relink for late API records
   notifications.ts     Dispatch (§9): matcher × decision matrix, per-revision
                        dedupe, instant email + daily digest, operator alerts
   sourceHealth.ts      Data-health contract (SPEC.md §10) + public status query
   household.ts         Secret-gated read-only household summary (SPEC.md §2)
-  bookmarks.ts         Public bookmark list/toggle (single-household pilot)
+  bookmarks.ts         Public bookmark list/toggle (single-household pilot);
+                       resolves both recall and outbreak alertTypes
   seed.ts              Pilot household seed, structured as the §11 questionnaire
-app/                    Next.js App Router — Feed / Detail / Saved / Household,
-                       PWA manifest + generated icons, Serwist service worker
-components/             Shared UI (RecallCard, Timeline, FilterBar, etc.)
+app/                    Next.js App Router — Feed / Detail / Saved / Household /
+                       Outbreak detail, PWA manifest + generated icons, Serwist
+                       service worker
+components/             Shared UI (RecallCard, OutbreakCard, Timeline, FilterBar, etc.)
 lib/                    Frontend-only copy/format helpers (not imported from convex/)
 tests/
   fixtures/            Recorded API response shapes, incl. malformed cases
@@ -198,7 +215,46 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       enable live sending — see `.env.example`. Not yet verified: real push
       receipt on an iOS-installed PWA and on Android (§14 requires physical
       devices) and a fresh Lighthouse ≥90 pass across all categories.
-- [ ] **Phase 4** — CDC outbreaks
+- [ ] **Phase 4** — CDC outbreaks. Shipped: a regex-based scraper adapter
+      (`convex/adapters/cdc.ts`) for CDC's "Current Outbreak List" landing
+      page plus each investigation's own detail page — no clean structured
+      API exists (§3), so this follows the same fixture-tested-not-live-called
+      approach as the FDA RSS adapter. A pathogen-keyword filter keeps only
+      foodborne/zoonotic-enteric investigations (E. coli, Salmonella,
+      Listeria, botulism, etc.) out of a landing page that also lists
+      Measles, COVID-19, and other unrelated CDC outbreaks. Every qualifying
+      investigation's detail page is re-fetched each 3h cron run (rather than
+      cached like press releases) since that's what surfaces an Open→Closed
+      transition or an updated case count — CDC's list only ever holds a
+      handful of current investigations, so the cost is small
+      (`convex/ingest/cdc.ts`). Content-hash revisioning and the zero-record
+      anomaly → `sourceHealth` (source `cdc`, already modeled since Phase 0)
+      mirror the recall adapters exactly (`convex/outbreaks.ts`). The §7
+      matcher already generalized to outbreak-shaped alerts (state, keyword
+      via `suspectedFood`, risk-group) with no production code changes needed
+      — only tests (`matching.test.ts`). Outbreaks appear in the Feed
+      interleaved with recalls by date (`OutbreakCard`, orange "Be aware"
+      badge per §12's severity system, red impact line for case/hospitalization
+      counts), with a full detail view (`OutbreakDetail`, Timeline, bookmark +
+      share) at `/outbreaks/[id]`. Bookmarks and the Saved tab now handle both
+      alert types.
+      **Deliberately deferred** (tracked here rather than silently dropped,
+      same as prior phases' open items): (1) **outbreak notification
+      dispatch** — `notificationsSent`/`digestQueue` already model an
+      `outbreak` alertType and §4 specifies "active outbreaks treated as
+      Class I equivalent for alerting," but wiring instant/digest delivery
+      through `convex/notifications.ts` is left for a focused follow-up
+      rather than bundled into this phase; (2) **per-state case counts** —
+      CDC's own state-by-state breakdown is rendered by a client-side chart
+      widget fed from a per-outbreak JSON file whose path isn't derivable
+      from the investigation's URL, so `states` is a best-effort extraction
+      from distribution/summary prose on the detail page itself (via the
+      same `parseStatesFromText` FSIS uses as a fallback) — consistent with
+      §7's acknowledged "matching degrades to state + keyword" for
+      outbreaks, but not CDC's authoritative case-location list; (3) the §8
+      "For your household" feed-personalization section and reason chips
+      remain unbuilt for both recalls and outbreaks (matcher output exists,
+      UI wiring doesn't).
 - [ ] **Phase 5** — Accounts, onboarding, household UI — the public gate
 - [ ] **Phase 6** — Chain matching & polish
 - [ ] **Phase 7** — Barcode scanner & pantry

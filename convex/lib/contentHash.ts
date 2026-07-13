@@ -27,6 +27,28 @@ export function computeContentHash(fields: MaterialFields): string {
   return sha256Hex(canonical);
 }
 
+/** The fields whose change constitutes a material outbreak update (§4/§6). */
+export type OutbreakMaterialFields = {
+  pathogen: string;
+  suspectedFood?: string;
+  states: string[];
+  status: string;
+  caseCount?: number;
+  hospitalizations?: number;
+};
+
+export function computeOutbreakContentHash(fields: OutbreakMaterialFields): string {
+  const canonical = JSON.stringify({
+    pathogen: fields.pathogen.trim(),
+    suspectedFood: fields.suspectedFood?.trim() ?? "",
+    states: [...fields.states].sort(),
+    status: fields.status,
+    caseCount: fields.caseCount ?? null,
+    hospitalizations: fields.hospitalizations ?? null,
+  });
+  return sha256Hex(canonical);
+}
+
 // ---------------------------------------------------------------------------
 // SHA-256 (FIPS 180-4). Round constants are derived from the fractional parts
 // of the cube/square roots of the first primes rather than transcribed, and the

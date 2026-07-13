@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as adapters_cdc from "../adapters/cdc.js";
 import type * as adapters_fdaRss from "../adapters/fdaRss.js";
 import type * as adapters_fsis from "../adapters/fsis.js";
 import type * as adapters_openfda from "../adapters/openfda.js";
@@ -16,6 +17,7 @@ import type * as audit from "../audit.js";
 import type * as bookmarks from "../bookmarks.js";
 import type * as crons from "../crons.js";
 import type * as household from "../household.js";
+import type * as ingest_cdc from "../ingest/cdc.js";
 import type * as ingest_fdaRss from "../ingest/fdaRss.js";
 import type * as ingest_fsis from "../ingest/fsis.js";
 import type * as ingest_lib from "../ingest/lib.js";
@@ -31,6 +33,7 @@ import type * as lib_push from "../lib/push.js";
 import type * as lib_states from "../lib/states.js";
 import type * as lib_summary from "../lib/summary.js";
 import type * as notifications from "../notifications.js";
+import type * as outbreaks from "../outbreaks.js";
 import type * as press from "../press.js";
 import type * as push from "../push.js";
 import type * as pushSubscriptions from "../pushSubscriptions.js";
@@ -45,6 +48,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "adapters/cdc": typeof adapters_cdc;
   "adapters/fdaRss": typeof adapters_fdaRss;
   "adapters/fsis": typeof adapters_fsis;
   "adapters/openfda": typeof adapters_openfda;
@@ -53,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   bookmarks: typeof bookmarks;
   crons: typeof crons;
   household: typeof household;
+  "ingest/cdc": typeof ingest_cdc;
   "ingest/fdaRss": typeof ingest_fdaRss;
   "ingest/fsis": typeof ingest_fsis;
   "ingest/lib": typeof ingest_lib;
@@ -68,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   "lib/states": typeof lib_states;
   "lib/summary": typeof lib_summary;
   notifications: typeof notifications;
+  outbreaks: typeof outbreaks;
   press: typeof press;
   push: typeof push;
   pushSubscriptions: typeof pushSubscriptions;

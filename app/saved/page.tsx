@@ -3,6 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { RecallCard } from "@/components/RecallCard";
+import { OutbreakCard } from "@/components/OutbreakCard";
 import { CardListSkeleton } from "@/components/CardListSkeleton";
 
 // Saved tab (SPEC.md §12): bookmarked alerts, "check the freezer when I get
@@ -35,9 +36,13 @@ export default function SavedPage() {
         </div>
       ) : (
         <ul className="flex flex-col gap-3 px-4 pb-4">
-          {bookmarks.map((recall) => (
-            <li key={recall._id}>
-              <RecallCard recall={recall} />
+          {bookmarks.map((entry) => (
+            <li key={entry._id}>
+              {entry.alertType === "outbreak" ? (
+                <OutbreakCard outbreak={entry} />
+              ) : (
+                <RecallCard recall={entry} />
+              )}
             </li>
           ))}
         </ul>

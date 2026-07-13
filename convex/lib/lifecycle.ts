@@ -36,3 +36,13 @@ export function mapFsisLifecycle(activeNotice: string, closedDate: string): Life
   if (active === "false" || active === "closed") return "completed";
   return (closedDate ?? "").trim() ? "completed" : "active";
 }
+
+/**
+ * CDC outbreak "Investigation status" field ("Open"/"Closed"). Unknown or
+ * missing values map to 'active' — same safe-direction default as the recall
+ * adapters (§10): an outbreak stays visible rather than silently vanishing.
+ */
+export function mapCdcOutbreakStatus(investigationStatus: string): "active" | "resolved" {
+  const status = (investigationStatus ?? "").trim().toLowerCase();
+  return status === "closed" ? "resolved" : "active";
+}

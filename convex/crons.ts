@@ -29,6 +29,11 @@ crons.interval(
   {},
 );
 
+// CDC outbreak investigations (§3/§4: every 2–4h, Phase 4). Re-fetches every
+// current foodborne investigation each run — see convex/ingest/cdc.ts header
+// for why that's the right cadence for this source.
+crons.interval("CDC outbreak ingest", { hours: 3 }, internal.ingest.cdc.ingest, {});
+
 // Daily email digests (§9). Runs hourly and sends to each member whose local
 // hour matches their digestHour; empty digests still send (the trust mechanism),
 // with copy gated by source health (§10).

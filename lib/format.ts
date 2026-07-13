@@ -21,6 +21,13 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** "12 sick" / "12 sick · 4 hospitalized" — the card's red impact line (SPEC.md §12), outbreaks only. */
+export function formatImpactLine(caseCount?: number, hospitalizations?: number): string | null {
+  if (!caseCount) return null;
+  const sick = `${caseCount} sick`;
+  return hospitalizations ? `${sick} · ${hospitalizations} hospitalized` : sick;
+}
+
 /** "2 hours ago" / "3 days ago" — used by the source-health status pill. */
 export function formatRelativeTime(timestampMs: number): string {
   const diffMs = Date.now() - timestampMs;

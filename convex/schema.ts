@@ -61,6 +61,30 @@ export const normalizedRecallFields = {
   linkPending: v.optional(v.boolean()),
 };
 
+// Fields shared by the adapter output (NormalizedOutbreak) and the outbreaks
+// table, mirroring normalizedRecallFields above.
+export const normalizedOutbreakFields = {
+  source: v.literal("cdc"),
+  sourceId: v.string(),
+  title: v.string(),
+  pathogen: v.string(),
+  suspectedFood: v.optional(v.string()),
+  states: v.array(v.string()),
+  status: v.union(v.literal("active"), v.literal("resolved")),
+  caseCount: v.optional(v.number()),
+  hospitalizations: v.optional(v.number()),
+  riskGroups: v.array(v.string()),
+  imageUrl: v.optional(v.string()),
+  sourceUrl: v.string(),
+  raw: v.any(),
+  contentHash: v.string(),
+  // ISO date (YYYY-MM-DD) the investigation page itself was last updated —
+  // CDC's outbreak pages carry no separate "outbreak start date" field, so
+  // this doubles as both the feed's sort key and its displayed date, same
+  // role recallDate plays for recalls.
+  publishedAt: v.string(),
+};
+
 export default defineSchema({
   recalls: defineTable({
     ...normalizedRecallFields,
@@ -73,24 +97,13 @@ export default defineSchema({
     .index("by_lifecycle", ["lifecycle"]),
 
   outbreaks: defineTable({
-    source: v.literal("cdc"),
-    sourceId: v.string(),
-    title: v.string(),
-    pathogen: v.string(),
-    suspectedFood: v.optional(v.string()),
-    states: v.array(v.string()),
-    status: v.union(v.literal("active"), v.literal("resolved")),
-    caseCount: v.optional(v.number()),
-    hospitalizations: v.optional(v.number()),
-    riskGroups: v.array(v.string()),
-    imageUrl: v.optional(v.string()),
-    sourceUrl: v.string(),
-    raw: v.any(),
-    contentHash: v.string(),
+    ...normalizedOutbreakFields,
     updateHistory: v.array(updateHistoryEntryValidator),
     firstSeenAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_source_id", ["source", "sourceId"]),
+  })
+    .index("by_source_id", ["source", "sourceId"])
+    .index("by_published_at", ["publishedAt"]),
 
   sourceHealth: defineTable({
     source: v.union(

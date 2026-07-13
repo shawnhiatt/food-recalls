@@ -89,6 +89,21 @@ export const PRESET_LABEL: Record<NotificationPreset, string> = {
   digest_only: "Digest only",
 };
 
+// Outbreak framing (SPEC.md §3, §11, Phase 4): "be aware right now" vs a
+// recall's "check your stuff" — CDC investigations often precede or never
+// become a recall, so they get their own, deliberately less-certain voice.
+export type OutbreakStatus = "active" | "resolved";
+
+export const OUTBREAK_STATUS_LABEL: Record<OutbreakStatus, string> = {
+  active: "Be aware",
+  resolved: "Resolved",
+};
+
+export const OUTBREAK_STATUS_DESCRIPTION: Record<OutbreakStatus, string> = {
+  active: "Investigators haven't necessarily confirmed a specific product yet.",
+  resolved: "CDC has closed this investigation.",
+};
+
 export type SourceCode = "fda" | "fsis" | "fda_rss" | "cdc";
 
 export const SOURCE_LABEL: Record<SourceCode, string> = {

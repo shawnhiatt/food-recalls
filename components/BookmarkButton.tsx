@@ -4,16 +4,22 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-export function BookmarkButton({ alertId }: { alertId: Id<"recalls"> }) {
+export function BookmarkButton({
+  alertId,
+  alertType = "recall",
+}: {
+  alertId: Id<"recalls"> | Id<"outbreaks">;
+  alertType?: "recall" | "outbreak";
+}) {
   const bookmarked = useQuery(api.bookmarks.isBookmarked, { alertId });
   const toggle = useMutation(api.bookmarks.toggle);
 
   return (
     <button
       type="button"
-      onClick={() => void toggle({ alertId, alertType: "recall" })}
+      onClick={() => void toggle({ alertId, alertType })}
       aria-pressed={bookmarked ?? false}
-      aria-label={bookmarked ? "Remove bookmark" : "Save this recall"}
+      aria-label={bookmarked ? "Remove bookmark" : `Save this ${alertType}`}
       className="flex h-11 w-11 items-center justify-center rounded-full active:opacity-70"
       style={{ background: "var(--color-secondary)" }}
     >
