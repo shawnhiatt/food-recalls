@@ -46,13 +46,17 @@ export const getPilotSummary = query({
       .collect();
 
     let preset: Preset = "recommended";
+    let pushEnabled = false;
     const firstMember = members[0];
     if (firstMember) {
       const settings = await ctx.db
         .query("notificationSettings")
         .withIndex("by_member", (q) => q.eq("memberId", firstMember._id))
         .unique();
-      if (settings) preset = inferPresetLabel(settings.urgencyThreshold);
+      if (settings) {
+        preset = inferPresetLabel(settings.urgencyThreshold);
+        pushEnabled = settings.pushOptIn;
+      }
     }
 
     const summary = buildHouseholdSummary({
@@ -73,6 +77,7 @@ export const getPilotSummary = query({
       pets: preferences.pets,
       members: preferences.members,
       preset,
+      pushEnabled,
     };
   },
 });

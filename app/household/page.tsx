@@ -6,6 +6,7 @@ import {
   formatAllergenLabel,
   type AgeBand,
 } from "@/lib/copy";
+import { PushNotificationSetup } from "@/components/PushNotificationSetup";
 
 // Household tab (SPEC.md §12 nav item 4): read-only recap of the seeded
 // preferences (§11 Step 5) + notification settings view. A Server Component
@@ -94,6 +95,7 @@ export default async function HouseholdPage() {
         <p className="text-sm" style={{ color: "var(--color-foreground)" }}>
           {PRESET_LABEL[summary.preset]}
         </p>
+        <PushNotificationSetup initialEnabled={summary.pushEnabled} preset={summary.preset} />
       </Section>
 
       <p className="mt-8 text-xs" style={{ color: "var(--color-muted-foreground)" }}>

@@ -34,11 +34,18 @@ type PrefsOverride = {
 
 type SettingsOverride = {
   emailOptIn?: boolean;
+  pushOptIn?: boolean;
+  pushSubscription?: { endpoint: string; keys: { p256dh: string; auth: string } };
   digestEnabled?: boolean;
   urgencyThreshold?: "class1_only" | "class1_plus_allergen" | "everything";
   digestHour?: number;
   timezone?: string;
   lastDigestAt?: number;
+};
+
+const TEST_PUSH_SUBSCRIPTION = {
+  endpoint: "https://push.example/sub-1",
+  keys: { p256dh: "p256dh-key", auth: "auth-key" },
 };
 
 async function seedHousehold(
@@ -72,7 +79,8 @@ async function seedHousehold(
     await ctx.db.insert("notificationSettings", {
       memberId,
       emailOptIn: settings.emailOptIn ?? true,
-      pushOptIn: false,
+      pushOptIn: settings.pushOptIn ?? false,
+      pushSubscription: settings.pushSubscription,
       urgencyThreshold: settings.urgencyThreshold ?? "class1_plus_allergen",
       digestEnabled: settings.digestEnabled ?? true,
       digestHour: settings.digestHour ?? 17,
@@ -248,6 +256,117 @@ describe("instant routing + dedupe (§9)", () => {
     });
     expect(res).toMatchObject({ dispatched: 0 });
     expect(await sentRows(t)).toHaveLength(0);
+  });
+});
+
+describe("push routing + dedupe (§9, Phase 3)", () => {
+  test("Class I state match with push enabled → instant push recorded once, idempotent on replay", async () => {
+    const t = setupConvex();
+    await seedHousehold(
+      t,
+      { states: ["NC"] },
+      { emailOptIn: false, pushOptIn: true, pushSubscription: TEST_PUSH_SUBSCRIPTION },
+    );
+    const recallId = await insertRecall(t, { classification: "Class I", states: ["NC"] });
+
+    await dispatch(t, { recallId, event: "new" });
+    let sent = await sentRows(t);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ channel: "push", mode: "instant", alertType: "recall" });
+
+    // Replay: no duplicate push send.
+    await dispatch(t, { recallId, event: "new" });
+    sent = await sentRows(t);
+    expect(sent).toHaveLength(1);
+  });
+
+  test("member with both channels enabled on a hard-floor match gets independent email + push sends", async () => {
+    const t = setupConvex();
+    await seedHousehold(
+      t,
+      { states: ["CA"], allergens: ["milk"] },
+      {
+        emailOptIn: true,
+        pushOptIn: true,
+        pushSubscription: TEST_PUSH_SUBSCRIPTION,
+        urgencyThreshold: "class1_only",
+      },
+    );
+    const recallId = await insertRecall(t, {
+      classification: "Class I",
+      states: ["TX"],
+      allergens: ["milk"],
+    });
+
+    await dispatch(t, { recallId, event: "new" });
+    const sent = await sentRows(t);
+    expect(sent).toHaveLength(2);
+    const channels = sent.map((s) => s.channel).sort();
+    expect(channels).toEqual(["email", "push"]);
+    expect(sent.every((s) => s.mode === "instant")).toBe(true);
+  });
+
+  test("pushOptIn true but no stored subscription → no push send", async () => {
+    const t = setupConvex();
+    await seedHousehold(
+      t,
+      { states: ["NC"] },
+      { emailOptIn: false, pushOptIn: true, urgencyThreshold: "everything" },
+    );
+    const recallId = await insertRecall(t, { classification: "Class I", states: ["NC"] });
+
+    await dispatch(t, { recallId, event: "new" });
+    expect(await sentRows(t)).toHaveLength(0);
+  });
+
+  test("below-threshold match never pushes — push is instant-only, no digest fallback", async () => {
+    const t = setupConvex();
+    await seedHousehold(
+      t,
+      { states: ["NC"] },
+      {
+        emailOptIn: false,
+        pushOptIn: true,
+        pushSubscription: TEST_PUSH_SUBSCRIPTION,
+        urgencyThreshold: "class1_plus_allergen",
+      },
+    );
+    const recallId = await insertRecall(t, { classification: "Class II", states: ["NC"] });
+
+    await dispatch(t, { recallId, event: "new" });
+    expect(await sentRows(t)).toHaveLength(0);
+    expect(await queueRows(t)).toHaveLength(0); // no push digest concept
+  });
+
+  test("closure never pushes, even for a previously push-notified member", async () => {
+    const t = setupConvex();
+    await seedHousehold(
+      t,
+      { states: ["NC"] },
+      {
+        emailOptIn: false,
+        pushOptIn: true,
+        pushSubscription: TEST_PUSH_SUBSCRIPTION,
+        urgencyThreshold: "everything",
+      },
+    );
+    const recallId = await insertRecall(t, {
+      classification: "Class I",
+      states: ["NC"],
+      contentHash: "rev-1",
+    });
+
+    await dispatch(t, { recallId, event: "new" });
+    expect(await sentRows(t)).toHaveLength(1); // the earlier instant push
+
+    await t.run((ctx) =>
+      ctx.db.patch(recallId, { lifecycle: "completed", contentHash: "rev-2" }),
+    );
+    await dispatch(t, { recallId, event: "closure" });
+    // No new push, no email closure line either (email was never opted in
+    // for this member) — closures are an email-digest concept only.
+    expect(await sentRows(t)).toHaveLength(1);
+    expect(await queueRows(t)).toHaveLength(0);
   });
 });
 

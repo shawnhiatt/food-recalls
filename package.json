@@ -19,7 +19,8 @@
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "serwist": "^9.0.11"
+    "serwist": "^9.0.11",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^4.0.0",
@@ -28,6 +29,7 @@
     "@types/node": "^26.1.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
     "convex-test": "^0.0.35",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.3.0",

@@ -25,21 +25,28 @@ import {
   type EmailMessage,
   type InstantAlert,
 } from "./lib/email";
+import { renderPushPayload } from "./lib/push";
 import { computeHealthState, type HealthState } from "./sourceHealth";
 
 // Notification dispatch (SPEC.md §9). The §7 matcher and the §9 decision matrix
 // live as pure functions in lib/; this module is the STATEFUL layer: per-member
-// dedupe against notificationsSent, instant email scheduling, and the eager
-// digest queue. Every send is idempotent on the (member, alert, channel,
-// contentHash) tuple — replaying dispatch after a crash sends zero duplicates
-// (§14 Phase 2).
+// dedupe against notificationsSent, instant email/push scheduling, and the
+// eager email digest queue. Every send is idempotent on the (member, alert,
+// channel, contentHash) tuple — replaying dispatch after a crash sends zero
+// duplicates (§14 Phase 2/3).
 //
 // At-most-once, deliberately: the dedupe row / queue drain is committed BEFORE
-// the Resend action runs. A crash between the DB commit and the actual send
-// loses that one email but never duplicates one — the correct bias for a safety
-// tool that must stay trusted (§15 "alert fatigue is the real failure mode").
+// the delivery action runs. A crash between the DB commit and the actual send
+// loses that one email/push but never duplicates one — the correct bias for a
+// safety tool that must stay trusted (§15 "alert fatigue is the real failure
+// mode").
 //
-// Phase 2 has a single channel (email). Push is Phase 3; outbreaks Phase 4.
+// Push (Phase 3) is instant-only — there's no push digest, matching §9's
+// model where push is the lock-screen channel and the email digest is the
+// sole "quiet" channel. So push only ever fires on `decision.route ===
+// "instant"`; it never queues, and it never sends closure/resolution lines
+// (§9: "resolved recalls never notify instantly" on ANY channel — email's
+// closure line is a digest-only concept). Outbreaks are Phase 4.
 
 function recallUrl(recallId: string): string {
   const base = (process.env.APP_BASE_URL ?? "https://foodrecalls.app").replace(
@@ -49,17 +56,18 @@ function recallUrl(recallId: string): string {
   return `${base}/recalls/${recallId}`;
 }
 
-/** Has this exact revision already been emailed to the member (any mode)? */
+/** Has this exact revision already been sent to the member on this channel? */
 async function hasSentRevision(
   ctx: MutationCtx,
   memberId: Id<"members">,
   alertId: string,
   contentHash: string,
+  channel: "email" | "push",
 ): Promise<boolean> {
   const sends = await ctx.db
     .query("notificationsSent")
     .withIndex("by_member_alert", (q) =>
-      q.eq("memberId", memberId).eq("alertId", alertId).eq("channel", "email"),
+      q.eq("memberId", memberId).eq("alertId", alertId).eq("channel", channel),
     )
     .collect();
   return sends.some((s) => s.contentHash === contentHash);
@@ -89,8 +97,9 @@ async function enqueueMatch(
   },
 ): Promise<void> {
   const { memberId, recall, match, severity, now } = params;
-  // Already emailed this revision → nothing to queue.
-  if (await hasSentRevision(ctx, memberId, recall._id, recall.contentHash)) {
+  // Already emailed this revision → nothing to queue. (The digest is
+  // email-only; push never queues, so this check is always channel "email".)
+  if (await hasSentRevision(ctx, memberId, recall._id, recall.contentHash, "email")) {
     return;
   }
   const rows = await queueRowsFor(ctx, memberId, recall._id);
@@ -188,8 +197,8 @@ export const dispatchForRecall = internalMutation({
           .query("notificationSettings")
           .withIndex("by_member", (q) => q.eq("memberId", member._id))
           .unique();
-        // Email is the only Phase-2 channel — no opt-in, no notification.
-        if (!settings || !settings.emailOptIn) continue;
+        // No channel opted in → no notification on any path below.
+        if (!settings || (!settings.emailOptIn && !settings.pushOptIn)) continue;
 
         if (event === "closure") {
           // A now-closed recall must never announce itself as new: drop any
@@ -198,9 +207,11 @@ export const dispatchForRecall = internalMutation({
           for (const r of rows.filter((r) => r.kind === "match")) {
             await ctx.db.delete(r._id);
           }
-          // Closure lines go only to members previously notified for this
-          // alert, and only while the category stays enabled (absolute gate §7).
-          if (!match.categoryEnabled) continue;
+          // Closure lines are an email-digest concept only (push never
+          // fires for closures — see the module header); go only to members
+          // previously emailed for this alert, and only while the category
+          // stays enabled (absolute gate §7).
+          if (!settings.emailOptIn || !match.categoryEnabled) continue;
           const priorSends = await ctx.db
             .query("notificationsSent")
             .withIndex("by_member_alert", (q) =>
@@ -225,38 +236,70 @@ export const dispatchForRecall = internalMutation({
         });
 
         if (decision.route === "instant") {
-          if (await hasSentRevision(ctx, member._id, recallId, recall.contentHash)) {
-            continue;
+          if (
+            settings.emailOptIn &&
+            !(await hasSentRevision(ctx, member._id, recallId, recall.contentHash, "email"))
+          ) {
+            // Dedupe claim BEFORE the send (at-most-once): record, then schedule.
+            await ctx.db.insert("notificationsSent", {
+              memberId: member._id,
+              alertId: recallId,
+              alertType: "recall",
+              contentHash: recall.contentHash,
+              channel: "email",
+              mode: "instant",
+              sentAt: now,
+            });
+            const alert: InstantAlert = {
+              title: recall.title,
+              firm: recall.firm,
+              severity,
+              matchedOn: match.matchedOn,
+              url: recallUrl(recallId),
+            };
+            const message: EmailMessage = {
+              to: member.email,
+              subject: instantSubject(alert),
+              text: renderInstantText(alert, household.name),
+            };
+            await ctx.scheduler.runAfter(
+              0,
+              internal.notifications.sendInstantEmail,
+              { message },
+            );
+            dispatched++;
           }
-          // Dedupe claim BEFORE the send (at-most-once): record, then schedule.
-          await ctx.db.insert("notificationsSent", {
-            memberId: member._id,
-            alertId: recallId,
-            alertType: "recall",
-            contentHash: recall.contentHash,
-            channel: "email",
-            mode: "instant",
-            sentAt: now,
-          });
-          const alert: InstantAlert = {
-            title: recall.title,
-            firm: recall.firm,
-            severity,
-            matchedOn: match.matchedOn,
-            url: recallUrl(recallId),
-          };
-          const message: EmailMessage = {
-            to: member.email,
-            subject: instantSubject(alert),
-            text: renderInstantText(alert, household.name),
-          };
-          await ctx.scheduler.runAfter(
-            0,
-            internal.notifications.sendInstantEmail,
-            { message },
-          );
-          dispatched++;
-        } else if (decision.route === "digest") {
+
+          if (
+            settings.pushOptIn &&
+            settings.pushSubscription &&
+            !(await hasSentRevision(ctx, member._id, recallId, recall.contentHash, "push"))
+          ) {
+            await ctx.db.insert("notificationsSent", {
+              memberId: member._id,
+              alertId: recallId,
+              alertType: "recall",
+              contentHash: recall.contentHash,
+              channel: "push",
+              mode: "instant",
+              sentAt: now,
+            });
+            const payload = renderPushPayload({
+              title: recall.title,
+              severity,
+              url: recallUrl(recallId),
+              tag: recallId,
+            });
+            await ctx.scheduler.runAfter(0, internal.push.sendPushNotification, {
+              memberId: member._id,
+              subscription: settings.pushSubscription,
+              payload,
+            });
+            dispatched++;
+          }
+        } else if (decision.route === "digest" && settings.emailOptIn) {
+          // The email digest is the sole "quiet" channel — push is
+          // instant-only and simply doesn't fire below its threshold.
           await enqueueMatch(ctx, {
             memberId: member._id,
             recall,

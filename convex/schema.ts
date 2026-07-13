@@ -157,7 +157,19 @@ export default defineSchema({
     memberId: v.id("members"),
     emailOptIn: v.boolean(),
     pushOptIn: v.boolean(),
-    pushSubscription: v.optional(v.any()),
+    // Web Push subscription (PushSubscription.toJSON() shape). Cleared
+    // automatically when the push service reports it gone (404/410) — see
+    // convex/push.ts.
+    pushSubscription: v.optional(
+      v.object({
+        endpoint: v.string(),
+        keys: v.object({
+          p256dh: v.string(),
+          auth: v.string(),
+        }),
+        expirationTime: v.optional(v.union(v.number(), v.null())),
+      }),
+    ),
     urgencyThreshold: v.union(
       v.literal("class1_only"),
       v.literal("class1_plus_allergen"),

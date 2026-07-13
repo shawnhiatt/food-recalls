@@ -161,7 +161,29 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       Convex env (see `.env.example`) to enable live sending. Deferred: the
       feed's "For your household" personalized section/reason chips (UI wiring
       of the same matcher) and web push (Phase 3).
-- [ ] **Phase 3** — Web push notifications
+- [ ] **Phase 3** — Web push notifications. Shipped: VAPID Web Push end to
+      end — service worker `push`/`notificationclick` handlers (`app/sw.ts`)
+      with lock-screen-safe payloads (`convex/lib/push.ts`: product name +
+      severity + deep link only, no match reasons — enforced by the
+      function's signature, which has no way to accept `matchedOn`), a Node
+      delivery action that no-ops without VAPID keys and self-clears a
+      subscription on a 404/410 (`convex/push.ts`), and push wired into the
+      §9 dispatch matrix as a second, fully independent instant channel
+      (`convex/notifications.ts`) — push never queues and never sends
+      closure/resolution lines, since the email digest remains the sole
+      "quiet" channel. Contextual permission flow
+      (`components/PushNotificationSetup.tsx`): a preset-aware explainer +
+      alert preview (push preview for Recommended/Everything, an email
+      preview for Digest only) renders before the native prompt ever fires,
+      posting through pilot-secret-gated Route Handlers
+      (`app/api/push/subscribe`, `/unsubscribe`) so `PILOT_ACCESS_SECRET`
+      never reaches the browser. Per-channel dedupe/routing (independent
+      `notificationsSent` rows, instant-only, never on closures) covered by
+      tests. Set `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
+      (Convex env) and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (`.env.local`) to
+      enable live sending — see `.env.example`. Not yet verified: real push
+      receipt on an iOS-installed PWA and on Android (§14 requires physical
+      devices) and a fresh Lighthouse ≥90 pass across all categories.
 - [ ] **Phase 4** — CDC outbreaks
 - [ ] **Phase 5** — Accounts, onboarding, household UI — the public gate
 - [ ] **Phase 6** — Chain matching & polish
