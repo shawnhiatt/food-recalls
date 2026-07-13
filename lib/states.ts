@@ -30,3 +30,8 @@ export const US_STATES: Array<{ code: string; name: string }> = [
   { code: "WI", name: "Wisconsin" }, { code: "WY", name: "Wyoming" },
   { code: "DC", name: "District of Columbia" },
 ];
+
+/** Code → full name, for rendering stored preference codes (Phase 5 onboarding). */
+export const STATE_NAME: Record<string, string> = Object.fromEntries(
+  US_STATES.map((s) => [s.code, s.name]),
+);

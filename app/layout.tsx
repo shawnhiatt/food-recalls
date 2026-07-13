@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Public_Sans } from "next/font/google";
+import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
@@ -31,20 +32,22 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={publicSans.variable}>
-      <body>
-        <ConvexClientProvider>
-          <Header />
-          <div
-            className="mx-auto max-w-lg"
-            style={{ paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
-          >
-            {children}
-          </div>
-          <BottomNav />
-        </ConvexClientProvider>
-        <ServiceWorkerRegister />
-      </body>
-    </html>
+    <ConvexAuthNextjsServerProvider>
+      <html lang="en" className={publicSans.variable}>
+        <body>
+          <ConvexClientProvider>
+            <Header />
+            <div
+              className="mx-auto max-w-lg"
+              style={{ paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
+            >
+              {children}
+            </div>
+            <BottomNav />
+          </ConvexClientProvider>
+          <ServiceWorkerRegister />
+        </body>
+      </html>
+    </ConvexAuthNextjsServerProvider>
   );
 }

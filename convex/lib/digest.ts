@@ -45,6 +45,8 @@ export type DigestInput = {
   sources: SourceStatusLine[];
   /** For "Data current as of …" in the footer. */
   now: number;
+  /** One-click email unsubscribe link for this member (§2). */
+  unsubscribeUrl?: string;
 };
 
 const SEVERITY_LABEL: Record<DigestSeverity, string> = {
@@ -242,6 +244,9 @@ export function renderDigestText(input: DigestInput): string {
   lines.push(
     "Data from openFDA, FSIS, and CDC — unvalidated and not an official alerting service. Always verify against the official notice.",
   );
+  if (input.unsubscribeUrl) {
+    lines.push(`Unsubscribe from these emails: ${input.unsubscribeUrl}`);
+  }
 
   return lines.join("\n");
 }

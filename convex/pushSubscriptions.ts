@@ -1,16 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, internalMutation, type QueryCtx } from "./_generated/server";
-import { requirePilotSecret } from "./lib/access";
+import type { Id } from "./_generated/dataModel";
+import { getCurrentMember, requireMember } from "./lib/auth";
 
-// Push opt-in/opt-out (SPEC.md §9 contextual permission flow). Gated by the
-// same pilot secret as household.ts's getPilotSummary (§2) — these still
-// touch per-member notification settings, so they're never publicly callable
-// without it. Called from Next.js Route Handlers (app/api/push/*), never
-// directly from client-side Convex hooks, so the secret stays server-only.
-//
-// Single-household pilot (§2): there's no login yet, so "the member" is the
-// first member with notificationSettings — the same simplification
-// household.ts's getPilotSummary already makes for its preset lookup.
+// Push opt-in/opt-out (SPEC.md §9 contextual permission flow). Scoped to the
+// caller's own member via Convex Auth (Phase 5) — the subscription belongs to
+// the individual member (§2), so it's read/written only for that member. Now
+// callable straight from the authenticated client; the Phase-3 pilot-secret
+// Route Handlers are gone.
 
 const pushSubscriptionValidator = v.object({
   endpoint: v.string(),
@@ -21,45 +18,34 @@ const pushSubscriptionValidator = v.object({
   expirationTime: v.optional(v.union(v.number(), v.null())),
 });
 
-async function firstMemberWithSettings(ctx: QueryCtx) {
-  const household = await ctx.db.query("households").first();
-  if (!household) return null;
-  const members = await ctx.db
-    .query("members")
-    .withIndex("by_household", (q) => q.eq("householdId", household._id))
-    .collect();
-  for (const member of members) {
-    const settings = await ctx.db
-      .query("notificationSettings")
-      .withIndex("by_member", (q) => q.eq("memberId", member._id))
-      .unique();
-    if (settings) return { member, settings };
-  }
-  return null;
+async function settingsFor(ctx: QueryCtx, memberId: Id<"members">) {
+  return await ctx.db
+    .query("notificationSettings")
+    .withIndex("by_member", (q) => q.eq("memberId", memberId))
+    .unique();
 }
 
 export const getStatus = query({
-  args: { secret: v.string() },
-  handler: async (ctx, args) => {
-    requirePilotSecret(args.secret);
-    const found = await firstMemberWithSettings(ctx);
-    if (!found) return null;
+  args: {},
+  handler: async (ctx) => {
+    const member = await getCurrentMember(ctx);
+    if (!member) return null;
+    const settings = await settingsFor(ctx, member._id);
+    if (!settings) return null;
     return {
-      pushOptIn: found.settings.pushOptIn,
-      hasSubscription: found.settings.pushSubscription !== undefined,
+      pushOptIn: settings.pushOptIn,
+      hasSubscription: settings.pushSubscription !== undefined,
     };
   },
 });
 
 export const subscribe = mutation({
-  args: { secret: v.string(), subscription: pushSubscriptionValidator },
+  args: { subscription: pushSubscriptionValidator },
   handler: async (ctx, args) => {
-    requirePilotSecret(args.secret);
-    const found = await firstMemberWithSettings(ctx);
-    if (!found) {
-      throw new ConvexError("no pilot household member to subscribe");
-    }
-    await ctx.db.patch(found.settings._id, {
+    const member = await requireMember(ctx);
+    const settings = await settingsFor(ctx, member._id);
+    if (!settings) throw new ConvexError({ code: "no_settings" });
+    await ctx.db.patch(settings._id, {
       pushOptIn: true,
       pushSubscription: args.subscription,
     });
@@ -68,12 +54,12 @@ export const subscribe = mutation({
 });
 
 export const unsubscribe = mutation({
-  args: { secret: v.string() },
-  handler: async (ctx, args) => {
-    requirePilotSecret(args.secret);
-    const found = await firstMemberWithSettings(ctx);
-    if (!found) return { ok: true as const };
-    await ctx.db.patch(found.settings._id, {
+  args: {},
+  handler: async (ctx) => {
+    const member = await requireMember(ctx);
+    const settings = await settingsFor(ctx, member._id);
+    if (!settings) return { ok: true as const };
+    await ctx.db.patch(settings._id, {
       pushOptIn: false,
       pushSubscription: undefined,
     });

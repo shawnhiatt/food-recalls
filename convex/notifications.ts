@@ -48,12 +48,17 @@ import { computeHealthState, type HealthState } from "./sourceHealth";
 // (§9: "resolved recalls never notify instantly" on ANY channel — email's
 // closure line is a digest-only concept). Outbreaks are Phase 4.
 
+function appBase(): string {
+  return (process.env.APP_BASE_URL ?? "https://foodrecalls.app").replace(/\/$/, "");
+}
+
 function recallUrl(recallId: string): string {
-  const base = (process.env.APP_BASE_URL ?? "https://foodrecalls.app").replace(
-    /\/$/,
-    "",
-  );
-  return `${base}/recalls/${recallId}`;
+  return `${appBase()}/recalls/${recallId}`;
+}
+
+/** One-click email unsubscribe link for a member (§2). Undefined pre-migration. */
+function unsubscribeUrl(token: string | undefined): string | undefined {
+  return token ? `${appBase()}/unsubscribe?token=${token}` : undefined;
 }
 
 /** Has this exact revision already been sent to the member on this channel? */
@@ -270,7 +275,11 @@ export const dispatchForRecall = internalMutation({
             const message: EmailMessage = {
               to: member.email,
               subject: instantSubject(alert),
-              text: renderInstantText(alert, household.name),
+              text: renderInstantText(
+                alert,
+                household.name,
+                unsubscribeUrl(settings.unsubscribeToken),
+              ),
             };
             await ctx.scheduler.runAfter(
               0,
@@ -428,6 +437,7 @@ export const drainDueDigests = internalMutation({
         allSourcesCurrent: status.allCurrent,
         sources: status.sources,
         now,
+        unsubscribeUrl: unsubscribeUrl(settings.unsubscribeToken),
       };
       messages.push({
         to: member.email,

@@ -1,23 +1,18 @@
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { v, ConvexError } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { getCurrentMember, requireMember } from "./lib/auth";
 
-// Bookmarks (SPEC.md §12 "Saved" tab, detail-view bookmark action). Not in
-// §2's sensitive-data list (age bands, allergies, pregnancy, emails) — just
-// "this recall was saved" — so these stay plain public functions, fully
-// live-reactive, unlike household.ts's secret-gated query.
-//
-// Single-household pilot simplification: resolves "the" member instead of
-// taking a caller-supplied memberId, since no auth exists until Phase 5 and
-// there's exactly one household during the pilot (§2, §17).
-async function getPilotMember(ctx: QueryCtx | MutationCtx) {
-  return await ctx.db.query("members").first();
-}
+// Bookmarks (SPEC.md §12 "Saved" tab, detail-view bookmark action). Scoped to
+// the caller's own member row (Phase 5 auth). Reads degrade to empty/false for
+// signed-out visitors — the recall/outbreak feed and detail pages are a public
+// safety surface, so an anonymous viewer sees them without a bookmark state
+// rather than an error. Toggling requires sign-in.
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const member = await getPilotMember(ctx);
+    const member = await getCurrentMember(ctx);
     if (!member) return [];
 
     const bookmarks = await ctx.db
@@ -50,7 +45,7 @@ export const list = query({
 export const isBookmarked = query({
   args: { alertId: v.string() },
   handler: async (ctx, args) => {
-    const member = await getPilotMember(ctx);
+    const member = await getCurrentMember(ctx);
     if (!member) return false;
     const existing = await ctx.db
       .query("bookmarks")
@@ -67,8 +62,7 @@ export const toggle = mutation({
     alertType: v.union(v.literal("recall"), v.literal("outbreak")),
   },
   handler: async (ctx, args) => {
-    const member = await getPilotMember(ctx);
-    if (!member) throw new ConvexError("no pilot household seeded yet");
+    const member = await requireMember(ctx);
 
     const existing = await ctx.db
       .query("bookmarks")

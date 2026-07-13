@@ -1,8 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
-// SPEC.md §6 — data model. Phases 0–4 are a private pilot (§2): preference data
-// must only be reachable through internal functions.
+// SPEC.md §6 — data model. Phase 5 (§2) is the public gate: Convex Auth
+// (email OTP) plus per-household authorization on every function. `authTables`
+// adds the auth-owned tables (users, authSessions, authAccounts,
+// authVerificationCodes, authRefreshTokens, authVerifiers, authRateLimits).
+// Preference data is now reachable only through the caller's own member row
+// (convex/lib/auth.ts), never a shared secret.
 
 export const lifecycleValidator = v.union(
   v.literal("active"),
@@ -86,6 +91,8 @@ export const normalizedOutbreakFields = {
 };
 
 export default defineSchema({
+  ...authTables,
+
   recalls: defineTable({
     ...normalizedRecallFields,
     updateHistory: v.array(updateHistoryEntryValidator),
@@ -163,8 +170,39 @@ export default defineSchema({
   members: defineTable({
     householdId: v.id("households"),
     email: v.string(),
-    // authUserId, role ('owner' | 'member') added in Phase 5
-  }).index("by_household", ["householdId"]),
+    // Phase 5 (§2): a member maps to a Convex Auth user once they sign in.
+    // Optional because (a) the pilot household was seeded before auth existed
+    // and claims its owner on first sign-in, and (b) an invited member exists
+    // as an email-only row until they accept. `role` gates owner-only actions
+    // (invites, deletion). Both are backfilled for pre-Phase-5 rows by
+    // households.migratePilotMembers.
+    authUserId: v.optional(v.id("users")),
+    role: v.optional(v.union(v.literal("owner"), v.literal("member"))),
+  })
+    .index("by_household", ["householdId"])
+    .index("by_auth_user", ["authUserId"])
+    .index("by_email", ["email"]),
+
+  // Household invitations (§2 "invitation flow with roles"). The owner emails
+  // a tokenized invite; the invitee signs in and is bound to this household +
+  // role. One row per outstanding/decided invitation.
+  invites: defineTable({
+    householdId: v.id("households"),
+    email: v.string(), // invitee, lowercased
+    role: v.union(v.literal("owner"), v.literal("member")),
+    token: v.string(), // random, emailed; the accept credential
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("revoked"),
+    ),
+    invitedByMemberId: v.id("members"),
+    createdAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_household", ["householdId"])
+    .index("by_email", ["email"]),
 
   notificationSettings: defineTable({
     memberId: v.id("members"),
@@ -191,12 +229,18 @@ export default defineSchema({
     digestEnabled: v.boolean(),
     digestHour: v.number(),
     timezone: v.string(),
+    // One-click email unsubscribe (§2). A per-member opaque token embedded in
+    // every email footer; the public /unsubscribe route flips emailOptIn off
+    // with no login. Backfilled for pre-Phase-5 rows by migratePilotMembers.
+    unsubscribeToken: v.optional(v.string()),
     // Last time a daily digest actually went out to this member (Phase 2).
     // Guards the hourly digest cron against sending twice in the same local
     // day; empty digests leave no notificationsSent trace, so this is tracked
     // directly rather than inferred from the send log.
     lastDigestAt: v.optional(v.number()),
-  }).index("by_member", ["memberId"]),
+  })
+    .index("by_member", ["memberId"])
+    .index("by_unsubscribe_token", ["unsubscribeToken"]),
 
   notificationsSent: defineTable({
     memberId: v.id("members"),

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { subscribeToPush, unsubscribeFromPush } from "@/lib/webPush";
 import type { NotificationPreset } from "@/lib/copy";
 
@@ -46,6 +48,8 @@ export function PushNotificationSetup({
 }) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [status, setStatus] = useState<Status>("idle");
+  const subscribe = useMutation(api.pushSubscriptions.subscribe);
+  const unsubscribe = useMutation(api.pushSubscriptions.unsubscribe);
 
   useEffect(() => {
     const supported =
@@ -65,12 +69,21 @@ export function PushNotificationSetup({
         return;
       }
       const subscription = await subscribeToPush();
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subscription.toJSON()),
+      const json = subscription.toJSON() as {
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+        expirationTime?: number | null;
+      };
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+        throw new Error("incomplete push subscription");
+      }
+      await subscribe({
+        subscription: {
+          endpoint: json.endpoint,
+          keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+          expirationTime: json.expirationTime ?? undefined,
+        },
       });
-      if (!res.ok) throw new Error(`subscribe failed: ${res.status}`);
       setEnabled(true);
       setStatus("idle");
     } catch (err) {
@@ -83,7 +96,7 @@ export function PushNotificationSetup({
     setStatus("requesting");
     try {
       await unsubscribeFromPush();
-      await fetch("/api/push/unsubscribe", { method: "POST" });
+      await unsubscribe({});
       setEnabled(false);
       setStatus("idle");
     } catch (err) {

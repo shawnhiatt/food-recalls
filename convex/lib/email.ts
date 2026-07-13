@@ -96,7 +96,11 @@ export function instantSubject(alert: InstantAlert): string {
   return `[${SEVERITY_LABEL[alert.severity]}] Recall: ${alert.title}`;
 }
 
-export function renderInstantText(alert: InstantAlert, householdName: string): string {
+export function renderInstantText(
+  alert: InstantAlert,
+  householdName: string,
+  unsubscribeUrl?: string,
+): string {
   const reasons = alert.matchedOn.map((d) => DIMENSION_LABEL[d]).join(", ");
   const lines = [
     `Food Recalls — a recall affects ${householdName}.`,
@@ -111,5 +115,8 @@ export function renderInstantText(alert: InstantAlert, householdName: string): s
   lines.push(
     "Data from openFDA/FSIS — unvalidated, not an official alerting service. Verify against the official notice.",
   );
+  if (unsubscribeUrl) {
+    lines.push(`Unsubscribe from these emails: ${unsubscribeUrl}`);
+  }
   return lines.join("\n");
 }

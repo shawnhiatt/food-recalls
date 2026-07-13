@@ -90,16 +90,31 @@ npm test
 npm run typecheck
 ```
 
-### Frontend (Phase 1)
+### Frontend
 
 ```bash
-# Set the pilot access secret (gates the read-only Household tab — SPEC.md §2)
-npx convex env set PILOT_ACCESS_SECRET <a long random value>
-# Mirror the same value into .env.local (server-only; never NEXT_PUBLIC_):
-#   PILOT_ACCESS_SECRET=<the same value>
-
 npm run dev:web    # Next.js dev server (run `npm run dev` for Convex in another terminal)
 ```
+
+### Accounts / auth (Phase 5)
+
+Sign-in is passwordless email OTP via Convex Auth (SPEC.md §2/§5). Set the JWT
+signing keys on the Convex deployment once (the `npx @convex-dev/auth` wizard
+generates them, or generate an RS256 keypair by hand):
+
+```bash
+npx convex env set JWT_PRIVATE_KEY <PKCS8 private key>   # newlines as spaces
+npx convex env set JWKS <public JWKS JSON>
+npx convex env set SITE_URL http://localhost:3000        # your frontend origin
+```
+
+Sign-in codes and household invites email through the same Resend config as
+notifications; without `RESEND_API_KEY` set, codes are logged to the Convex
+deployment (dev only) so local sign-in still works. On first sign-in a user is
+bound by verified email to any pre-existing member row (the pilot owner claims
+the seeded household), otherwise they're sent through onboarding. The old
+`PILOT_ACCESS_SECRET` gate is retired — every function now enforces
+per-household authorization.
 
 `npx convex dev` writes `NEXT_PUBLIC_CONVEX_URL` into `.env.local` automatically on first run.
 See `.env.example` for the full list.
@@ -255,13 +270,40 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       "For your household" feed-personalization section and reason chips
       remain unbuilt for both recalls and outbreaks (matcher output exists,
       UI wiring doesn't).
-- [ ] **Phase 5** — Accounts, onboarding, household UI — the public gate
+- [ ] **Phase 5** — Accounts, onboarding, household UI — the public gate.
+      Shipped: **Convex Auth** with passwordless **email OTP** (`convex/auth.ts`,
+      `convex/ResendOTP.ts`, `convex/http.ts`) reusing the notifications Resend
+      transport; **per-household authorization** replaces the pilot secret —
+      every sensitive function resolves the caller's own member row and only
+      touches that member's household (`convex/lib/auth.ts`), so cross-household
+      access isn't expressible. First sign-in **claims** any pre-existing member
+      by verified email (`convex/lib/members.ts`), so the seeded pilot household
+      transitions with no manual migration. **Onboarding** is the §11
+      questionnaire as a 5-step wizard (`components/OnboardingWizard.tsx`),
+      reused prefilled for **"Redo setup"**; the Household tab is now fully
+      editable (categories, brands/keywords, notification preset, email toggle,
+      push). **Invitations with roles** (`convex/invites.ts`): the owner emails
+      a tokenized invite, the invitee signs in with that verified address and
+      is bound to the household. Full §2 privacy checklist: **email
+      verification** (inherent to OTP), **one-click unsubscribe**
+      (`convex/unsubscribe.ts` + `/unsubscribe`, token in every email footer),
+      **account deletion** (tears down the household when the last member
+      leaves) and **data export** (`household.exportData`), **authorization
+      tests** (§14: A-can't-read/write-B, owner-only guards, isolation —
+      `tests/household.test.ts`, `tests/invites.test.ts`), and **push
+      redaction** (already enforced by `convex/lib/push.ts`'s signature since
+      Phase 3). Verified end to end against the dev deployment: OTP sign-in →
+      claim-by-email into the Hiatt household → editable Household tab →
+      unsubscribe link resolves. 221 tests green. Auth env vars in the Accounts
+      section above. Still open: a formal WCAG 2.2 AA audit of the onboarding/
+      feed/detail screens, and the §8 "For your household" feed personalization
+      (carried forward, matcher output exists).
 - [ ] **Phase 6** — Chain matching & polish
 - [ ] **Phase 7** — Barcode scanner & pantry
 
-**Phases 0–4 are a private pilot.** No public signup, and all preference-reading Convex
-functions are internal (non-public) because household preferences contain sensitive
-information. See SPEC.md §2.
+**Phases 0–4 were a private pilot** (no public signup; preference-reading functions
+were secret-gated). **Phase 5 is the public gate**: Convex Auth + per-household
+authorization on every function. See SPEC.md §2.
 
 ## License
 
