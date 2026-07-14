@@ -51,6 +51,38 @@ urgency, not spec order.
       never actually run on physical hardware).
 - [ ] Cross-browser testing beyond Chromium (§14 Phase 1 exit criterion).
 
+## Spec gaps found in the 2026-07-14 full-codebase review
+
+Everything else claimed shipped was verified in place (249 tests green, typecheck
+clean, §10 archive rule, per-member digest timezones, §3 cron cadences, feed nav
+badge semantics, §11 label derive-then-pin, no unbranded dark-mode block). These
+three requirements were never built:
+
+- [ ] **Press-image mirroring to Convex file storage** (§15). Press-release image
+      URLs rot; the spec says to mirror images for matched/bookmarked alerts at
+      minimum. `ctx.storage` is unused anywhere in the codebase — cards and
+      detail views hotlink `imageUrl` directly. Sketch: an action that fetches
+      the image on first bookmark/match, stores it, and swaps `imageUrl` for the
+      storage URL (keep `imageSource` provenance).
+- [ ] **Archived alerts are unreachable** (§10). The spec keeps archived alerts
+      (non-active + older than 12 months) out of the default feed and matching
+      but says they stay "reachable via search and pantry/scanner UPC checks."
+      Neither path exists: there is no search feature (UI or API), and the
+      scanner/pantry only queries `lifecycle === "active"` recalls
+      (`activeRecalls` in `convex/pantry.ts`), so scanning a UPC from a
+      completed recall reports "no known recall." Fix is two parts: a text
+      search over recalls/outbreaks, and an archived-recall rung in the scanner
+      result ("this product had a recall, resolved in 2025" — distinct copy,
+      not an active warning).
+- [ ] **`linkPending` is a dead schema field.** §4 says a press record with no
+      matching API record creates a provisional recall flagged `linkPending`;
+      the implementation deliberately never creates provisional records — press
+      items only enrich existing enforcement records, retrying unmatched items
+      for 180 days before lapsing (`convex/press.ts`). That means a recall
+      announced by press release surfaces only weeks later when the enforcement
+      record lands. Either implement provisional records (spec behavior — better
+      timeliness) or remove the field and record the deviation in SPEC.md.
+
 ## Minor polish (low priority)
 
 - [ ] Digest crash between queue-drain and delivery loses that day's digest for

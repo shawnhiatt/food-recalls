@@ -129,7 +129,8 @@ convex/
   adapters/            Pure normalization per source (openFDA, FSIS, CDC) — the
                        project's center of gravity; tested with fixtures
   lib/                 Enrichment, state normalization, lifecycle, content hash,
-                       access.ts (pilot secret gate for household.ts)
+                       auth.ts (per-household authorization, Phase 5), matching,
+                       digest, email, push payloads, pantry matching
   recalls.ts           Upsert (internal) + public list/get (Phase 1 feed);
                        schedules notification dispatch on new/updated recalls
   outbreaks.ts         CDC outbreak upsert (internal) + public list/get (Phase 4);
@@ -159,7 +160,10 @@ tests/
 
 ## Build phases
 
-Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
+Ingest-first, auth-last (SPEC.md §13; exit criteria in §14). All 8 phases have
+shipped; the open items mentioned inside the entries below (WCAG audit, outbreak
+dispatch, device push verification, etc.) are tracked in [TODO.md](./TODO.md),
+which is the single working backlog now:
 
 - [x] **Phase 0** — Ingest, enrich, store (no UI); source health; household seed.
       Exit criteria closed 2026-07-11: full openFDA backfill complete (29,215
@@ -172,7 +176,7 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       the source) now refreshes tags silently — no fabricated revision, no
       timeline noise, no notification dispatch — so enrichment improvements
       plus a backfill re-run can never trigger an alert storm.
-- [ ] **Phase 1** — Read-only PWA dashboard (feed, detail, timeline, bookmarks).
+- [x] **Phase 1** — Read-only PWA dashboard (feed, detail, timeline, bookmarks).
       UI shipped and verified: Core-tier PWA scaffold, public Convex API
       layer, all four screens tested against live data, Lighthouse
       100/100/100 (performance/accessibility/best practices) on Feed and
@@ -210,7 +214,7 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       notifications, per SPEC.md §17.12 and the §10 archive exclusion.
       Deferred: the feed's "For your household" personalized section/reason
       chips (UI wiring of the same matcher) and web push (Phase 3).
-- [ ] **Phase 3** — Web push notifications. Shipped: VAPID Web Push end to
+- [x] **Phase 3** — Web push notifications. Shipped: VAPID Web Push end to
       end — service worker `push`/`notificationclick` handlers (`app/sw.ts`)
       with lock-screen-safe payloads (`convex/lib/push.ts`: product name +
       severity + deep link only, no match reasons — enforced by the
@@ -223,17 +227,18 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       "quiet" channel. Contextual permission flow
       (`components/PushNotificationSetup.tsx`): a preset-aware explainer +
       alert preview (push preview for Recommended/Everything, an email
-      preview for Digest only) renders before the native prompt ever fires,
-      posting through pilot-secret-gated Route Handlers
-      (`app/api/push/subscribe`, `/unsubscribe`) so `PILOT_ACCESS_SECRET`
-      never reaches the browser. Per-channel dedupe/routing (independent
+      preview for Digest only) renders before the native prompt ever fires.
+      (Originally shipped behind pilot-secret-gated Route Handlers; superseded
+      in Phase 5 — subscribe/unsubscribe are now authenticated Convex
+      mutations in `convex/pushSubscriptions.ts`, and the Route Handlers and
+      pilot secret are gone.) Per-channel dedupe/routing (independent
       `notificationsSent` rows, instant-only, never on closures) covered by
       tests. Set `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
       (Convex env) and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (`.env.local`) to
       enable live sending — see `.env.example`. Not yet verified: real push
       receipt on an iOS-installed PWA and on Android (§14 requires physical
       devices) and a fresh Lighthouse ≥90 pass across all categories.
-- [ ] **Phase 4** — CDC outbreaks. Shipped: a regex-based scraper adapter
+- [x] **Phase 4** — CDC outbreaks. Shipped: a regex-based scraper adapter
       (`convex/adapters/cdc.ts`) for CDC's "Current Outbreak List" landing
       page plus each investigation's own detail page — no clean structured
       API exists (§3), so this follows the same fixture-tested-not-live-called
@@ -273,7 +278,7 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       "For your household" feed-personalization section and reason chips
       remain unbuilt for both recalls and outbreaks (matcher output exists,
       UI wiring doesn't).
-- [ ] **Phase 5** — Accounts, onboarding, household UI — the public gate.
+- [x] **Phase 5** — Accounts, onboarding, household UI — the public gate.
       Shipped: **Convex Auth** with passwordless **email OTP** (`convex/auth.ts`,
       `convex/ResendOTP.ts`, `convex/http.ts`) reusing the notifications Resend
       transport; **per-household authorization** replaces the pilot secret —
@@ -301,7 +306,7 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       section above. Still open: a formal WCAG 2.2 AA audit of the onboarding/
       feed/detail screens, and the §8 "For your household" feed personalization
       (carried forward, matcher output exists).
-- [ ] **Phase 6** — Chain matching & polish. Shipped: **chain (fuzzy retailer)
+- [x] **Phase 6** — Chain matching & polish. Shipped: **chain (fuzzy retailer)
       matching** — `matchRecall` (`convex/lib/matching.ts`) now matches a
       household's saved stores against a recall's raw `distribution` text,
       always at `'possible'` confidence (§7: chain-only matches never notify
@@ -331,7 +336,7 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       unchanged: severity styling and share flows were already fully built
       (Phase 4's severity system; `ShareButton` on both Detail views since
       Phase 1) — audited, not rebuilt.
-- [ ] **Phase 7** — Barcode scanner & pantry. Shipped: a **Scanner** tab
+- [x] **Phase 7** — Barcode scanner & pantry. Shipped: a **Scanner** tab
       (`app/scanner/page.tsx`, now the 4th `BottomNav` entry) with camera
       barcode scanning (`components/BarcodeScanner.tsx`, ZXing's
       `BrowserMultiFormatReader` dynamically imported on that route only —
