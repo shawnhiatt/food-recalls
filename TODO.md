@@ -6,27 +6,30 @@ urgency, not spec order.
 
 ## Production setup (quick, do these first)
 
-- [ ] **Set `RESEND_API_KEY` + `RESEND_FROM` on the production Convex deployment**
+- [x] **Set `RESEND_API_KEY` + `RESEND_FROM` on the production Convex deployment**
       (`good-lynx-479`) for real email delivery — sign-in OTP codes, invites,
       instant/digest notifications. Right now they only land in the Convex
       dashboard's Logs tab.
       `npx convex env set RESEND_API_KEY <key> --prod`
       `npx convex env set RESEND_FROM "Food Recalls <alerts@yourdomain>" --prod`
-- [ ] **Set `OPENFDA_API_KEY`** on both dev and prod — currently running
+- [x] **Set `OPENFDA_API_KEY`** on both dev and prod — currently running
       unauthenticated (lower rate limit). Free to register.
       `npx convex env set OPENFDA_API_KEY <key> --prod` (and without `--prod` for dev)
-- [ ] **Set `OPERATOR_EMAIL` on prod** so source-health degradation (FSIS/CDC, see
+- [x] **Set `OPERATOR_EMAIL` on prod** so source-health degradation (FSIS/CDC, see
       below) actually self-alerts instead of only logging.
-- [ ] **Sign in on the production URL** and confirm claim-by-email binds you to the
+- [x] **Sign in on the production URL** and confirm claim-by-email binds you to the
       seeded "Hiatt household" — first real end-to-end check of prod auth.
-- [ ] **Decide what to do with the dev deployment's crons.** Both dev and prod now
-      poll openFDA/FSIS/CDC/FDA-RSS independently on their own schedules — that's
-      double real-world API traffic against the same external sources for no
-      benefit once prod is the deployment you actually use. Either keep dev around
-      deliberately for a testing sandbox, or stop relying on it day to day.
-- [ ] Confirm the openFDA historical backfill on prod finished (~29k records last
+- [x] **Decide what to do with the dev deployment's crons.** Resolved 2026-07-14:
+      env-gated all cron registrations behind `ENABLE_CRONS` in `convex/crons.ts`.
+      Set only on prod (`good-lynx-479`), so dev no longer registers or runs any
+      crons. Note: Convex evaluates cron env vars at deploy time only — the flag
+      must be set on a deployment *before* code lands there or its crons drop.
+      Dev redeployed clean; prod keeps its crons on its next deploy (flag armed).
+- [x] Confirm the openFDA historical backfill on prod finished (~29k records last
       time; it self-schedules via `ctx.scheduler`, no need to babysit it, just
-      check the count later: `npx convex data recalls --prod`).
+      check the count later: `npx convex data recalls --prod`). Verified 2026-07-14:
+      `fda`/`fda_rss` sources report `current` with recent successful runs and
+      recall data is populated.
 
 ## Data-source reliability
 

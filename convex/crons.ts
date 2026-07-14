@@ -7,41 +7,52 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// openFDA publishes weekly; a daily pull keeps the "current" window tight
-// without hammering the API.
-crons.daily(
-  "openFDA food enforcement ingest",
-  { hourUTC: 9, minuteUTC: 15 },
-  internal.ingest.openfda.ingestRecent,
-  {},
-);
+// Scheduled work runs only where ENABLE_CRONS is set — prod. Dev deployments
+// share this code but shouldn't duplicate external-API ingest traffic or re-run
+// the digest loop; set ENABLE_CRONS on a dev deployment temporarily if you need
+// to exercise a cron there.
+//
+// Convex evaluates env vars in cron definitions at DEPLOY time only ("reevaluated
+// on deployment", per the environment-variables docs) — flipping ENABLE_CRONS
+// afterward does nothing until the next `convex deploy`/`convex dev`. So the flag
+// must already be set on a deployment before code lands there, or its crons drop.
+if (process.env.ENABLE_CRONS) {
+  // openFDA publishes weekly; a daily pull keeps the "current" window tight
+  // without hammering the API.
+  crons.daily(
+    "openFDA food enforcement ingest",
+    { hourUTC: 9, minuteUTC: 15 },
+    internal.ingest.openfda.ingestRecent,
+    {},
+  );
 
-// FSIS is near real-time (§3: every 2–4h).
-crons.interval("FSIS recall ingest", { hours: 3 }, internal.ingest.fsis.ingest, {});
+  // FSIS is near real-time (§3: every 2–4h).
+  crons.interval("FSIS recall ingest", { hours: 3 }, internal.ingest.fsis.ingest, {});
 
-// FDA press releases (§3: every 2–4h) — photos, risk-group text, and real
-// notice URLs enriching the enforcement records; plus the Open Food Facts
-// image fallback.
-crons.interval(
-  "FDA press release ingest",
-  { hours: 3 },
-  internal.ingest.fdaRss.ingest,
-  {},
-);
+  // FDA press releases (§3: every 2–4h) — photos, risk-group text, and real
+  // notice URLs enriching the enforcement records; plus the Open Food Facts
+  // image fallback.
+  crons.interval(
+    "FDA press release ingest",
+    { hours: 3 },
+    internal.ingest.fdaRss.ingest,
+    {},
+  );
 
-// CDC outbreak investigations (§3/§4: every 2–4h, Phase 4). Re-fetches every
-// current foodborne investigation each run — see convex/ingest/cdc.ts header
-// for why that's the right cadence for this source.
-crons.interval("CDC outbreak ingest", { hours: 3 }, internal.ingest.cdc.ingest, {});
+  // CDC outbreak investigations (§3/§4: every 2–4h, Phase 4). Re-fetches every
+  // current foodborne investigation each run — see convex/ingest/cdc.ts header
+  // for why that's the right cadence for this source.
+  crons.interval("CDC outbreak ingest", { hours: 3 }, internal.ingest.cdc.ingest, {});
 
-// Daily email digests (§9). Runs hourly and sends to each member whose local
-// hour matches their digestHour; empty digests still send (the trust mechanism),
-// with copy gated by source health (§10).
-crons.hourly(
-  "send daily email digests",
-  { minuteUTC: 0 },
-  internal.notifications.sendDigests,
-  {},
-);
+  // Daily email digests (§9). Runs hourly and sends to each member whose local
+  // hour matches their digestHour; empty digests still send (the trust
+  // mechanism), with copy gated by source health (§10).
+  crons.hourly(
+    "send daily email digests",
+    { minuteUTC: 0 },
+    internal.notifications.sendDigests,
+    {},
+  );
+}
 
 export default crons;
