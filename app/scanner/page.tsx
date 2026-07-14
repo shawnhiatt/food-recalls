@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { formatRelativeTime } from "@/lib/format";
-import { NO_KNOWN_RECALL_COPY, sameManufacturerExplanation } from "@/lib/copy";
+import { archivedRecallExplanation, NO_KNOWN_RECALL_COPY, sameManufacturerExplanation } from "@/lib/copy";
 
 // Scanner tab (SPEC.md §12, Phase 7): camera UPC scan (in-store check +
 // pantry audit) with always-available manual entry, scan-to-pantry
@@ -46,9 +46,10 @@ export default function ScannerPage() {
 }
 
 type ScanOutcome = {
-  status: "recall" | "same_manufacturer" | "no_known_recall";
+  status: "recall" | "same_manufacturer" | "archived_recall" | "no_known_recall";
   productName?: string;
   brand?: string;
+  resolvedYear?: string;
   matchedRecalls: Array<{ _id: Id<"recalls">; title: string; firm: string }>;
 };
 
@@ -242,6 +243,20 @@ function ScanOutcomeCard({ outcome }: { outcome: ScanOutcome }) {
         </p>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
           {sameManufacturerExplanation(outcome.matchedRecalls.map((r) => r.firm))}
+        </p>
+        <RecallLinks recalls={outcome.matchedRecalls} />
+      </div>
+    );
+  }
+
+  if (outcome.status === "archived_recall") {
+    return (
+      <div className="mt-3 rounded-(--radius-base) border p-3" style={{ borderColor: "var(--color-border)", background: "var(--color-card)" }}>
+        <p className="text-sm font-bold" style={{ color: "var(--color-foreground)" }}>
+          {name} — resolved recall
+        </p>
+        <p className="mt-1 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
+          {archivedRecallExplanation(outcome.resolvedYear)}
         </p>
         <RecallLinks recalls={outcome.matchedRecalls} />
       </div>

@@ -155,6 +155,38 @@ describe("pantry.matches — live auto-matching (§14 Phase 7)", () => {
   });
 });
 
+describe("pantry.scanUpc — archived rung (§10)", () => {
+  test("an exact UPC on a resolved recall reports archived_recall, not no_known_recall", async () => {
+    const t = setupConvex();
+    const as = await seedAndSignIn(t);
+
+    // A resolved (terminated) recall naming this exact barcode. Active-recall
+    // matching ignores it, but the archived scanner rung must still find it.
+    await seedActiveRecall(t, {
+      lifecycle: "terminated",
+      productCodes: ["012345"],
+      title: "Recalled Widget",
+      firm: "Acme Foods",
+      recallDate: "2024-11-02",
+    });
+
+    const result = await as.action(api.pantry.scanUpc, { upc: "012345" });
+    expect(result.status).toBe("archived_recall");
+    expect(result.matchedRecalls).toHaveLength(1);
+    expect(result.matchedRecalls[0]!.title).toBe("Recalled Widget");
+    expect(result.resolvedYear).toBe("2024"); // no closure timeline entry → recallDate year
+  });
+
+  test("an active recall on the same UPC still wins as a live recall", async () => {
+    const t = setupConvex();
+    const as = await seedAndSignIn(t);
+    await seedActiveRecall(t, { lifecycle: "active", productCodes: ["012345"] });
+
+    const result = await as.action(api.pantry.scanUpc, { upc: "012345" });
+    expect(result.status).toBe("recall");
+  });
+});
+
 describe("pantry.remove", () => {
   test("removes a household's own item", async () => {
     const t = setupConvex();

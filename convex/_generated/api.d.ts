@@ -38,6 +38,7 @@ import type * as lib_members from "../lib/members.js";
 import type * as lib_onboarding from "../lib/onboarding.js";
 import type * as lib_pantry from "../lib/pantry.js";
 import type * as lib_push from "../lib/push.js";
+import type * as lib_search from "../lib/search.js";
 import type * as lib_states from "../lib/states.js";
 import type * as lib_summary from "../lib/summary.js";
 import type * as migrations from "../migrations.js";
@@ -89,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   "lib/onboarding": typeof lib_onboarding;
   "lib/pantry": typeof lib_pantry;
   "lib/push": typeof lib_push;
+  "lib/search": typeof lib_search;
   "lib/states": typeof lib_states;
   "lib/summary": typeof lib_summary;
   migrations: typeof migrations;

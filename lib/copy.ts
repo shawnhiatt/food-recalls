@@ -180,3 +180,11 @@ export function sameManufacturerExplanation(firms: string[]): string {
   const who = unique.length === 1 ? unique[0] : `${unique.length} companies`;
   return `Possible match — this isn't the exact recalled product, but ${who} has another active recall right now. Worth a look.`;
 }
+
+// §10 scanner archived rung: this exact product had a recall that has since
+// been resolved. Deliberately reassuring, not alarming — it's history, not an
+// active warning — while still nudging a check of older stock.
+export function archivedRecallExplanation(year?: string): string {
+  const when = year ? ` back in ${year}` : "";
+  return `This product had a recall${when} that's since been resolved — not an active warning. If you've had it a long time, check the lot details on the notice to be sure.`;
+}

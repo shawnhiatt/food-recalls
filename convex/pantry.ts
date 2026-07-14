@@ -3,7 +3,13 @@ import { v, ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentMember, requireHousehold } from "./lib/auth";
-import { matchPantryItem, type PantryMatch, type PantryMatchableRecall } from "./lib/pantry";
+import {
+  matchArchivedByUpc,
+  matchPantryItem,
+  type ArchivedRecallMatch,
+  type PantryMatch,
+  type PantryMatchableRecall,
+} from "./lib/pantry";
 
 // Scanner & pantry (SPEC.md §12 Scanner tab, §7 pantry dimension, Phase 7).
 // Every scan is persisted to `pantryItems` — the single table doubles as
@@ -45,6 +51,37 @@ export const matchOne = internalQuery({
   },
 });
 
+// The full-text index returns relevance-ranked hits; a handful is plenty since
+// we re-filter to exact UPC matches. Bounded to keep the read small (§6 budget).
+const ARCHIVED_SCAN_SEARCH_LIMIT = 25;
+
+/**
+ * Internal: exact-UPC match against NON-active (archived/resolved) recalls,
+ * via the `search_text` full-text index (§10 scanner UPC check). The index is
+ * a coarse filter — `matchArchivedByUpc` narrows to exact, non-active hits.
+ */
+export const matchArchived = internalQuery({
+  args: { upc: v.string() },
+  handler: async (ctx, args): Promise<ArchivedRecallMatch[]> => {
+    const hits = await ctx.db
+      .query("recalls")
+      .withSearchIndex("search_text", (q) => q.search("searchText", args.upc))
+      .take(ARCHIVED_SCAN_SEARCH_LIMIT);
+    return matchArchivedByUpc(
+      args.upc,
+      hits.map((r) => ({
+        _id: r._id,
+        title: r.title,
+        firm: r.firm,
+        lifecycle: r.lifecycle,
+        productCodes: r.productCodes,
+        updateHistory: r.updateHistory,
+        recallDate: r.recallDate,
+      })),
+    );
+  },
+});
+
 /** Internal: persist one scan to the caller's household pantry. */
 export const recordScan = internalMutation({
   args: {
@@ -82,12 +119,19 @@ async function fetchOffProduct(upc: string): Promise<{ productName?: string; bra
 }
 
 export type ScanResult = {
-  status: "recall" | "same_manufacturer" | "no_known_recall";
+  status: "recall" | "same_manufacturer" | "archived_recall" | "no_known_recall";
   productName?: string;
   brand?: string;
+  resolvedYear?: string; // archived_recall only: latest year among matched closures
   matchedRecalls: Array<{ _id: Id<"recalls">; title: string; firm: string }>;
   itemId: Id<"pantryItems">;
 };
+
+/** Most recent 4-digit year among a set of ISO dates, for "resolved in 2025" copy. */
+function latestYear(dates: string[]): string | undefined {
+  const years = dates.map((d) => d.slice(0, 4)).filter((y) => /^\d{4}$/.test(y)).sort();
+  return years.length > 0 ? years[years.length - 1] : undefined;
+}
 
 /**
  * Scan (or manually enter) a UPC: check for an exact recall match first
@@ -106,6 +150,25 @@ export const scanUpc = action({
       const itemId = await ctx.runMutation(internal.pantry.recordScan, { upc });
       const matchedRecalls = await ctx.runQuery(internal.pantry.summarize, { ids: exact.recallIds });
       return { status: "recall", matchedRecalls, itemId };
+    }
+
+    // §10: an exact UPC on a resolved/archived recall — "this product had a
+    // recall, since resolved." Informational, not an active warning, but more
+    // specific than the same-manufacturer soft match below and cheap (no
+    // external call), so it's checked first.
+    const archived = await ctx.runQuery(internal.pantry.matchArchived, { upc });
+    if (archived.length > 0) {
+      const itemId = await ctx.runMutation(internal.pantry.recordScan, { upc });
+      return {
+        status: "archived_recall",
+        matchedRecalls: archived.map(({ _id, title, firm }) => ({
+          _id: _id as Id<"recalls">,
+          title,
+          firm,
+        })),
+        resolvedYear: latestYear(archived.map((a) => a.resolvedDate)),
+        itemId,
+      };
     }
 
     const off = await fetchOffProduct(upc).catch(() => null);

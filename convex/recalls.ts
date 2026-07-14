@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import { normalizedRecallFields, hazardTypeValidator } from "./schema";
 import type { NormalizedRecall } from "./adapters/types";
 import { isFreshForNotification } from "./lib/matching";
+import { buildRecallSearchText } from "./lib/search";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4):
 //   hash unchanged  → touch updatedAt only (no timeline entry, per §9 matrix)
@@ -110,6 +111,7 @@ export const upsertBatch = internalMutation({
       if (existing === null) {
         const id = await ctx.db.insert("recalls", {
           ...record,
+          searchText: buildRecallSearchText(record),
           updateHistory: [
             {
               date: record.recallDate,
@@ -160,7 +162,12 @@ export const upsertBatch = internalMutation({
       // "material updates" across history (§14 hash stability) and schedule
       // notification dispatch for thousands of old records.
       if (deepEqual(existing.raw, record.raw)) {
-        await ctx.db.patch(existing._id, { ...record, ...preserved, updatedAt: now });
+        await ctx.db.patch(existing._id, {
+          ...record,
+          ...preserved,
+          searchText: buildRecallSearchText(record),
+          updatedAt: now,
+        });
         counts.touched++;
         continue;
       }
@@ -177,6 +184,7 @@ export const upsertBatch = internalMutation({
       await ctx.db.patch(existing._id, {
         ...record,
         ...preserved,
+        searchText: buildRecallSearchText(record),
         updateHistory: [...existing.updateHistory, entry],
         updatedAt: now,
       });

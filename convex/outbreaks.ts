@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import { normalizedOutbreakFields } from "./schema";
 import type { NormalizedOutbreak } from "./adapters/cdc";
 import { deepEqual, type UpsertCounts } from "./recalls";
+import { buildOutbreakSearchText } from "./lib/search";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4,
 // Phase 4), mirroring convex/recalls.ts's upsertBatch. All functions here are
@@ -67,6 +68,7 @@ export const upsertBatch = internalMutation({
       if (existing === null) {
         await ctx.db.insert("outbreaks", {
           ...record,
+          searchText: buildOutbreakSearchText(record),
           updateHistory: [
             {
               date: record.publishedAt,
@@ -92,7 +94,11 @@ export const upsertBatch = internalMutation({
       // code changed (e.g. an enrichment regex), not the source page. Refresh
       // silently — no timeline entry — mirroring recalls.upsertBatch's guard.
       if (deepEqual(existing.raw, record.raw)) {
-        await ctx.db.patch(existing._id, { ...record, updatedAt: now });
+        await ctx.db.patch(existing._id, {
+          ...record,
+          searchText: buildOutbreakSearchText(record),
+          updatedAt: now,
+        });
         counts.touched++;
         continue;
       }
@@ -105,6 +111,7 @@ export const upsertBatch = internalMutation({
       };
       await ctx.db.patch(existing._id, {
         ...record,
+        searchText: buildOutbreakSearchText(record),
         updateHistory: [...existing.updateHistory, entry],
         updatedAt: now,
       });

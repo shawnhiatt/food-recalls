@@ -98,19 +98,33 @@ export default defineSchema({
     updateHistory: v.array(updateHistoryEntryValidator),
     firstSeenAt: v.number(),
     updatedAt: v.number(),
+    // Denormalized full-text search field (§10: archived alerts stay reachable
+    // via search + scanner UPC checks). Built by the upsert from title/firm/
+    // productDesc/productCodes; optional because pre-existing rows are filled
+    // by a one-off backfill (convex/migrations.ts), not synchronously on deploy.
+    searchText: v.optional(v.string()),
   })
     .index("by_source_id", ["source", "sourceId"])
     .index("by_recall_date", ["recallDate"])
-    .index("by_lifecycle", ["lifecycle"]),
+    .index("by_lifecycle", ["lifecycle"])
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["lifecycle"],
+    }),
 
   outbreaks: defineTable({
     ...normalizedOutbreakFields,
     updateHistory: v.array(updateHistoryEntryValidator),
     firstSeenAt: v.number(),
     updatedAt: v.number(),
+    searchText: v.optional(v.string()), // see recalls.searchText
   })
     .index("by_source_id", ["source", "sourceId"])
-    .index("by_published_at", ["publishedAt"]),
+    .index("by_published_at", ["publishedAt"])
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["status"],
+    }),
 
   sourceHealth: defineTable({
     source: v.union(

@@ -54,3 +54,42 @@ export function matchPantryItem(
 
   return { matched: false };
 }
+
+// Archived-recall scanner rung (SPEC.md §10: archived alerts "reachable via
+// search and pantry/scanner UPC checks"). Distinct from the active rungs above:
+// a scanned UPC that exactly matches a NON-active recall means "this product
+// had a recall, since resolved" — informational, never an active warning. The
+// caller pre-filters candidates via the full-text search index; this narrows
+// them to exact, non-active UPC hits so a fuzzy search miss can't leak through.
+export type ArchivedMatchableRecall = {
+  _id: string;
+  title: string;
+  firm: string;
+  lifecycle: string;
+  productCodes: string[];
+  updateHistory: Array<{ date: string }>;
+  recallDate: string;
+};
+
+export type ArchivedRecallMatch = {
+  _id: string;
+  title: string;
+  firm: string;
+  resolvedDate: string; // ISO date the recall most likely closed
+};
+
+export function matchArchivedByUpc(
+  upc: string,
+  candidates: ArchivedMatchableRecall[],
+): ArchivedRecallMatch[] {
+  return candidates
+    .filter((r) => r.lifecycle !== "active" && r.productCodes.includes(upc))
+    .map((r) => ({
+      _id: r._id,
+      title: r.title,
+      firm: r.firm,
+      // Best "resolved" signal we store: the last timeline entry dates the
+      // closure transition; fall back to the original recall date.
+      resolvedDate: r.updateHistory[r.updateHistory.length - 1]?.date ?? r.recallDate,
+    }));
+}
