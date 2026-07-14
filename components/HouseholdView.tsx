@@ -54,11 +54,15 @@ export function HouseholdView() {
             ? summary.states.map((s) => STATE_NAME[s] ?? s).join(", ")
             : "No state set"}
         </p>
-        {summary.chains.length > 0 && (
-          <p className="mt-1 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-            Stores: {summary.chains.join(", ")}
-          </p>
-        )}
+      </Section>
+
+      <Section title="Stores you shop at">
+        <p className="mb-2 text-xs" style={{ color: "var(--color-muted-foreground)" }}>
+          We&apos;ll flag recalls whose notice mentions one of these — always labeled
+          &ldquo;possible match,&rdquo; since government data doesn&apos;t confirm specific
+          stores (Phase 6, §7).
+        </p>
+        <StringListEditor label="Stores" values={summary.chains} onSave={(chains) => ({ chains })} />
       </Section>
 
       {summary.allergens.length > 0 && (

@@ -18,6 +18,7 @@ import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
 import type * as bookmarks from "../bookmarks.js";
 import type * as crons from "../crons.js";
+import type * as feed from "../feed.js";
 import type * as household from "../household.js";
 import type * as http from "../http.js";
 import type * as ingest_cdc from "../ingest/cdc.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   bookmarks: typeof bookmarks;
   crons: typeof crons;
+  feed: typeof feed;
   household: typeof household;
   http: typeof http;
   "ingest/cdc": typeof ingest_cdc;

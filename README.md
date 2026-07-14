@@ -298,7 +298,36 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       section above. Still open: a formal WCAG 2.2 AA audit of the onboarding/
       feed/detail screens, and the §8 "For your household" feed personalization
       (carried forward, matcher output exists).
-- [ ] **Phase 6** — Chain matching & polish
+- [ ] **Phase 6** — Chain matching & polish. Shipped: **chain (fuzzy retailer)
+      matching** — `matchRecall` (`convex/lib/matching.ts`) now matches a
+      household's saved stores against a recall's raw `distribution` text,
+      always at `'possible'` confidence (§7: chain-only matches never notify
+      instantly; `decideRoute` already enforced this, now it's reachable).
+      The matcher also gained `matchedDetails`, naming exactly *which*
+      allergen/risk-group/store/brand/keyword matched, not just the
+      dimension — powers real reason chips ("Allergen: milk," "Publix,"
+      "Infant risk") instead of generic labels. Built alongside it, since
+      Phase 6's own exit criteria (chain matches labeled in "feed... and
+      detail") is unreachable without it: the **§8 feed personalization UI**,
+      deferred since Phase 2 (matcher output existed, no UI wiring — see
+      Phase 2/4/5 entries above). New `convex/feed.ts` (`myMatches`,
+      `matchForAlert`) reactively scopes matching to the caller's own
+      household (bounded scans, never a full-table `.collect()` — same
+      16MB-budget concern as `press.relinkUnmatched`), ranked per §8
+      (risk-group/allergen matches first, then severity, then confidence,
+      then recency). Frontend: `HouseholdMatchSection` ("For your household"
+      pinned section, hidden entirely when there are no matches rather than
+      showing an empty box), `ReasonChips` (chain matches render with a
+      dashed outline instead of a filled pill — visually distinct without
+      extra card text; full "possible match... verify" copy lives on
+      Detail, §11), a "Matched us" filter chip, a live Feed nav badge (count
+      of active household-matched alerts, clearing on resolve/archive per
+      §12 — not an unread count), and an editable "Stores you shop at" list
+      on the Household tab (previously read-only). 235 tests green
+      (`matching.test.ts` chain cases, new `feed.test.ts`). Deliberately
+      unchanged: severity styling and share flows were already fully built
+      (Phase 4's severity system; `ShareButton` on both Detail views since
+      Phase 1) — audited, not rebuilt.
 - [ ] **Phase 7** — Barcode scanner & pantry
 
 **Phases 0–4 were a private pilot** (no public signup; preference-reading functions

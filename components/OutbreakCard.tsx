@@ -2,14 +2,17 @@ import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
 import { OutbreakImage } from "@/components/OutbreakImage";
 import { OutbreakBadge } from "@/components/OutbreakBadge";
+import { ReasonChips } from "@/components/ReasonChips";
 import { formatDate, formatGeography, formatImpactLine } from "@/lib/format";
-import type { OutbreakStatus } from "@/lib/copy";
+import type { OutbreakStatus, MatchDimension } from "@/lib/copy";
 
 // Outbreak card anatomy (SPEC.md §12), the outbreak counterpart to
 // RecallCard: image/placeholder, date, geography, pathogen + suspected food
 // as the headline, "Be aware" badge instead of a risk level (outbreaks have
 // no FDA classification), and the red impact line ("12 sick · 4
-// hospitalized") this app's recalls don't carry data for yet.
+// hospitalized") this app's recalls don't carry data for yet. Reason chips
+// (§8, Phase 6) are optional: only the "For your household" section passes
+// match data.
 export type OutbreakCardData = {
   _id: Id<"outbreaks">;
   publishedAt: string;
@@ -24,7 +27,15 @@ export type OutbreakCardData = {
   imageUrl?: string;
 };
 
-export function OutbreakCard({ outbreak }: { outbreak: OutbreakCardData }) {
+export function OutbreakCard({
+  outbreak,
+  matchedOn,
+  matchedDetails,
+}: {
+  outbreak: OutbreakCardData;
+  matchedOn?: MatchDimension[];
+  matchedDetails?: Partial<Record<MatchDimension, string[]>>;
+}) {
   const hasUpdates = outbreak.updateHistory.length > 1;
   const impactLine = formatImpactLine(outbreak.caseCount, outbreak.hospitalizations);
   const headline = outbreak.suspectedFood ?? outbreak.title;
@@ -64,6 +75,9 @@ export function OutbreakCard({ outbreak }: { outbreak: OutbreakCardData }) {
             </span>
           )}
         </div>
+        {matchedOn && matchedOn.length > 0 && (
+          <ReasonChips matchedOn={matchedOn} matchedDetails={matchedDetails ?? {}} className="mt-2" />
+        )}
       </div>
     </Link>
   );

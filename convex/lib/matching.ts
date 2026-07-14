@@ -30,6 +30,12 @@ export type MatchResult = {
   matchedOn: MatchDimension[];
   /** Per-dimension confidence, for reason chips and 'possible' labeling. */
   confidence: Partial<Record<MatchDimension, Confidence>>;
+  /**
+   * The specific values that matched per dimension — e.g. `allergen: ["milk"]`,
+   * `chain: ["Publix"]`, `risk_group: ["infant"]` — so reason chips can read
+   * "Allergen: milk" / "Publix" (§8) instead of a generic dimension label.
+   */
+  matchedDetails: Partial<Record<MatchDimension, string[]>>;
   /** Allergen match present — feeds the §9 hard floor and threshold logic. */
   hasAllergenMatch: boolean;
   /** Risk-group match present — feeds the §9 hard floor. */
@@ -51,6 +57,8 @@ export type MatchableAlert = {
   riskGroups: string[];
   /** Outbreaks only (Phase 4); recalls pass undefined. */
   suspectedFood?: string;
+  /** Recalls only (Phase 6 chain matching); raw free text, outbreaks pass undefined. */
+  distribution?: string;
 };
 
 // Shape the matcher needs from householdPreferences.
@@ -59,6 +67,8 @@ export type MatchablePrefs = {
   brands: string[];
   keywords: string[];
   allergens: string[];
+  /** Fuzzy-match retailers (Phase 6) — always 'possible' confidence, per §7. */
+  chains: string[];
   categories: { humanFood: boolean; petFood: boolean; outbreaks: boolean };
   pets: Array<"dog" | "cat" | "other">;
   members: Array<{
@@ -100,10 +110,16 @@ function intersects(a: string[], b: string[] | Set<string>): boolean {
   return a.some((x) => set.has(x));
 }
 
-function textContainsAny(haystack: string, needles: string[]): boolean {
-  if (needles.length === 0) return false;
+/** The actual values present in both — for reason chips ("Allergen: milk"). */
+function intersectValues(a: string[], b: string[] | Set<string>): string[] {
+  const set = b instanceof Set ? b : new Set(b);
+  return a.filter((x) => set.has(x));
+}
+
+/** Which needles (original casing) appear in haystack — for reason chips. */
+function textContainsWhich(haystack: string, needles: string[]): string[] {
   const hay = haystack.toLowerCase();
-  return needles.some((n) => {
+  return needles.filter((n) => {
     const term = n.trim().toLowerCase();
     return term.length > 0 && hay.includes(term);
   });
@@ -123,6 +139,7 @@ export function matchRecall(
     categoryEnabled: false,
     matchedOn: [],
     confidence: {},
+    matchedDetails: {},
     hasAllergenMatch: false,
     hasRiskGroupMatch: false,
     overallConfidence: "high",
@@ -132,6 +149,7 @@ export function matchRecall(
 
   const matchedOn: MatchDimension[] = [];
   const confidence: Partial<Record<MatchDimension, Confidence>> = {};
+  const matchedDetails: Partial<Record<MatchDimension, string[]>> = {};
 
   // State: household state ∩ alert states, or a nationwide alert ('US').
   if (
@@ -145,30 +163,38 @@ export function matchRecall(
   // Brand / keyword: case-insensitive substring over productDesc + firm
   // (+ suspectedFood for outbreaks, §7).
   const text = `${alert.productDesc} ${alert.firm} ${alert.suspectedFood ?? ""}`;
-  if (textContainsAny(text, prefs.brands)) {
+  const matchedBrands = textContainsWhich(text, prefs.brands);
+  if (matchedBrands.length > 0) {
     matchedOn.push("brand");
     confidence.brand = "high";
+    matchedDetails.brand = matchedBrands;
   }
-  if (textContainsAny(text, prefs.keywords)) {
+  const matchedKeywords = textContainsWhich(text, prefs.keywords);
+  if (matchedKeywords.length > 0) {
     matchedOn.push("keyword");
     confidence.keyword = "high";
+    matchedDetails.keyword = matchedKeywords;
   }
 
   // Allergen: prefs ∩ alert allergens. High confidence (§7).
-  const hasAllergenMatch = intersects(prefs.allergens, alert.allergens);
+  const matchedAllergens = intersectValues(prefs.allergens, alert.allergens);
+  const hasAllergenMatch = matchedAllergens.length > 0;
   if (hasAllergenMatch) {
     matchedOn.push("allergen");
     confidence.allergen = "high";
+    matchedDetails.allergen = matchedAllergens;
   }
 
   // Risk group: household risk flags ∩ alert riskGroups.
-  const hasRiskGroupMatch = intersects(
+  const matchedRiskGroups = intersectValues(
     alert.riskGroups,
     householdRiskGroups(prefs),
   );
+  const hasRiskGroupMatch = matchedRiskGroups.length > 0;
   if (hasRiskGroupMatch) {
     matchedOn.push("risk_group");
     confidence.risk_group = "high";
+    matchedDetails.risk_group = matchedRiskGroups;
   }
 
   // Pet: pet-audience alert and the household has pets (category already
@@ -178,10 +204,22 @@ export function matchRecall(
     confidence.pet = "high";
   }
 
+  // Chain (Phase 6): fuzzy/substring match of a household's favorite stores
+  // against the recall's raw distribution text. Outbreaks carry no
+  // `distribution` field, so this is a no-op for them. ALWAYS 'possible' —
+  // government data never confirms specific stores (§3, §7) — so a
+  // chain-only match never notifies instantly regardless of how many stores
+  // match.
+  const matchedChains = textContainsWhich(alert.distribution ?? "", prefs.chains);
+  if (matchedChains.length > 0) {
+    matchedOn.push("chain");
+    confidence.chain = "possible";
+    matchedDetails.chain = matchedChains;
+  }
+
   const matched = matchedOn.length > 0;
   // overallConfidence is 'possible' only when every matched dimension is
-  // 'possible' — i.e. chain-only. No chain matching until Phase 6, so any
-  // Phase-2 match is 'high'.
+  // 'possible' — i.e. chain-only.
   const overallConfidence: Confidence =
     matched && matchedOn.every((d) => confidence[d] === "possible")
       ? "possible"
@@ -192,6 +230,7 @@ export function matchRecall(
     categoryEnabled: true,
     matchedOn,
     confidence,
+    matchedDetails,
     hasAllergenMatch,
     hasRiskGroupMatch,
     overallConfidence,

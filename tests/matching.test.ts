@@ -18,6 +18,7 @@ const basePrefs = (overrides: Partial<MatchablePrefs> = {}): MatchablePrefs => (
   brands: [],
   keywords: [],
   allergens: [],
+  chains: [],
   categories: { humanFood: true, petFood: true, outbreaks: true },
   pets: [],
   members: [],
@@ -91,6 +92,82 @@ describe("matchRecall — dimensions (§7)", () => {
     const r = matchRecall(baseAlert({ states: ["CA"] }), basePrefs({ states: ["NC"] }));
     expect(r.matched).toBe(false);
     expect(r.matchedOn).toEqual([]);
+  });
+
+  test("matchedDetails names the specific allergen/brand/keyword/risk-group that matched", () => {
+    const r = matchRecall(
+      baseAlert({
+        states: [],
+        productDesc: "Organic SPINACH clamshell",
+        firm: "Green Farm",
+        allergens: ["milk", "soy"],
+        riskGroups: ["infant"],
+      }),
+      basePrefs({
+        states: [],
+        brands: ["green farm"],
+        keywords: ["spinach"],
+        allergens: ["milk"],
+        members: [{ ageBand: "infant" }],
+      }),
+    );
+    expect(r.matchedDetails.brand).toEqual(["green farm"]);
+    expect(r.matchedDetails.keyword).toEqual(["spinach"]);
+    expect(r.matchedDetails.allergen).toEqual(["milk"]);
+    expect(r.matchedDetails.risk_group).toEqual(["infant"]);
+  });
+});
+
+// Chain (fuzzy retailer) matching — Phase 6, §7: "fuzzy/substring match
+// against distribution + press text, flagged confidence: 'possible'.
+// Chain-only matches never notify instantly."
+describe("matchRecall — chain matching (§7, Phase 6)", () => {
+  test("distribution text containing a household's store is a chain match at 'possible' confidence", () => {
+    const r = matchRecall(
+      baseAlert({
+        states: [],
+        distribution: "Distributed to Publix and Kroger stores in the Southeast.",
+      }),
+      basePrefs({ states: [], chains: ["Publix"] }),
+    );
+    expect(r.matched).toBe(true);
+    expect(r.matchedOn).toContain("chain");
+    expect(r.confidence.chain).toBe("possible");
+    expect(r.matchedDetails.chain).toEqual(["Publix"]);
+  });
+
+  test("chain-only match sets overallConfidence to 'possible' (never instant, §9)", () => {
+    const r = matchRecall(
+      baseAlert({ states: [], distribution: "Sold at Publix locations." }),
+      basePrefs({ states: [], chains: ["Publix"] }),
+    );
+    expect(r.matchedOn).toEqual(["chain"]);
+    expect(r.overallConfidence).toBe("possible");
+  });
+
+  test("chain + state match keeps overallConfidence 'high' — not chain-only", () => {
+    const r = matchRecall(
+      baseAlert({ states: ["NC"], distribution: "Sold at Publix locations." }),
+      basePrefs({ states: ["NC"], chains: ["Publix"] }),
+    );
+    expect(r.matchedOn).toEqual(expect.arrayContaining(["state", "chain"]));
+    expect(r.overallConfidence).toBe("high");
+  });
+
+  test("no distribution text on the alert (e.g. outbreaks) never matches on chain", () => {
+    const r = matchRecall(
+      baseAlert({ states: [], distribution: undefined }),
+      basePrefs({ states: [], chains: ["Publix"] }),
+    );
+    expect(r.matchedOn).not.toContain("chain");
+  });
+
+  test("household with no chains preference never chain-matches", () => {
+    const r = matchRecall(
+      baseAlert({ states: [], distribution: "Sold at Publix locations." }),
+      basePrefs({ states: [], chains: [] }),
+    );
+    expect(r.matched).toBe(false);
   });
 });
 
@@ -221,6 +298,7 @@ const matched = (over: Partial<MatchResult> = {}): MatchResult => ({
   categoryEnabled: true,
   matchedOn: ["state"],
   confidence: { state: "high" },
+  matchedDetails: {},
   hasAllergenMatch: false,
   hasRiskGroupMatch: false,
   overallConfidence: "high",

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 // SPEC.md §12: Feed / Scanner / Saved / Household, 4 tabs — Scanner appears
-// when built (Phase 7). Phase 1 ships 3. No Feed badge yet: the "active
-// household-matched alerts" count needs the Phase 2 matching engine.
+// when built (Phase 7).
 const TABS: Array<{ href: string; label: string; icon: (active: boolean) => ReactNode }> = [
   { href: "/", label: "Feed", icon: FeedIcon },
   { href: "/saved", label: "Saved", icon: SavedIcon },
@@ -15,6 +16,12 @@ const TABS: Array<{ href: string; label: string; icon: (active: boolean) => Reac
 
 export function BottomNav() {
   const pathname = usePathname();
+  const matches = useQuery(api.feed.myMatches, {});
+  // §12: the Feed badge is a count of ACTIVE household-matched alerts, not an
+  // unread count — it clears as matches resolve/archive, not on view.
+  const activeMatchCount = (matches ?? []).filter((m) =>
+    m.alertType === "recall" ? m.recall.lifecycle === "active" : m.outbreak.status === "active",
+  ).length;
 
   return (
     <nav
@@ -25,16 +32,29 @@ export function BottomNav() {
       <ul className="mx-auto flex max-w-lg items-stretch justify-around">
         {TABS.map((tab) => {
           const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+          const badge = tab.href === "/" && activeMatchCount > 0 ? activeMatchCount : null;
           return (
             <li key={tab.href} className="flex-1">
               <Link
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
-                className="no-select flex min-h-[56px] flex-col items-center justify-center gap-0.5 py-1.5 text-xs font-medium active:opacity-60"
+                className="no-select relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 py-1.5 text-xs font-medium active:opacity-60"
                 style={{ color: active ? "var(--color-primary)" : "var(--color-muted-foreground)" }}
               >
-                {tab.icon(active)}
+                <span className="relative">
+                  {tab.icon(active)}
+                  {badge !== null && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                      style={{ background: "var(--color-destructive)" }}
+                    >
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  )}
+                </span>
                 {tab.label}
+                {badge !== null && <span className="sr-only">, {badge} alerts match your household</span>}
               </Link>
             </li>
           );

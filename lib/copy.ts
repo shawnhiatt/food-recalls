@@ -112,3 +112,60 @@ export const SOURCE_LABEL: Record<SourceCode, string> = {
   fda_rss: "FDA press release data",
   cdc: "CDC outbreak data",
 };
+
+// §8 feed personalization reason chips ("Your state," "Allergen: milk,"
+// "Publix," "Pet," "Infant risk") + §7/§14 Phase 6 chain "possible" labeling.
+// Mirrors convex/lib/matching.ts's MatchDimension — duplicated intentionally,
+// same rationale as BIG_NINE_ALLERGENS above (app/ can't import convex/).
+export type MatchDimension =
+  | "state"
+  | "brand"
+  | "keyword"
+  | "allergen"
+  | "risk_group"
+  | "pet"
+  | "chain";
+
+const RISK_GROUP_CHIP_LABEL: Record<string, string> = {
+  infant: "Infant risk",
+  child: "Child risk",
+  pregnant: "Pregnancy risk",
+  older_adult: "65+ risk",
+  immunocompromised: "Immune risk",
+};
+
+/**
+ * The reason-chip text for one matched dimension. `details` is the specific
+ * matched value(s) (`matchResult.matchedDetails[dimension]`) when the
+ * dimension names something concrete (allergen, risk group, chain, brand,
+ * keyword) — state and pet are always generic.
+ */
+export function reasonChipLabel(dimension: MatchDimension, details?: string[]): string {
+  switch (dimension) {
+    case "state":
+      return "Your state";
+    case "pet":
+      return "Pet";
+    case "allergen":
+      return details?.length ? `Allergen: ${details.map(formatAllergenLabel).join(", ")}` : "Allergen match";
+    case "risk_group":
+      return details?.length
+        ? details.map((g) => RISK_GROUP_CHIP_LABEL[g] ?? g).join(", ")
+        : "At-risk member";
+    case "chain":
+      // Deliberately just the store name(s), per §8's example ("Publix") —
+      // the dashed/outline chip style itself signals 'possible' confidence;
+      // the full "Possible match — ... verify" copy (§11) lives on Detail.
+      return details?.length ? details.join(", ") : "Possible store match";
+    case "brand":
+      return details?.length ? details.join(", ") : "Your brand";
+    case "keyword":
+      return details?.length ? details.join(", ") : "Your keyword";
+  }
+}
+
+/** §11: the plain-language explanation of a chain ("possible") match. */
+export function chainMatchExplanation(chains: string[]): string {
+  const stores = chains.join(", ");
+  return `Possible match — the recall notice mentions ${stores}, but government data doesn't confirm specific stores. Check the official notice.`;
+}

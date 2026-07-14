@@ -2,15 +2,16 @@ import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
 import { RecallImage } from "@/components/RecallImage";
 import { RiskLevelBadge } from "@/components/RiskLevelBadge";
+import { ReasonChips } from "@/components/ReasonChips";
 import { formatDate, formatGeography } from "@/lib/format";
-import { HAZARD_TYPE_LABEL, type HazardType } from "@/lib/copy";
+import { HAZARD_TYPE_LABEL, type HazardType, type MatchDimension } from "@/lib/copy";
 
 // Card anatomy (SPEC.md §12), scoped to what Phase 1 data actually has:
 // product photo/placeholder, date, geography badge, product name, company,
 // hazard line + icon, plain-language risk level, UPDATE badge. "Retailer
-// when known" and the red impact line need Phase 6 chain matching and Phase
-// 4 outbreak data respectively — not built yet, so not rendered rather than
-// faked. Reason chips need the Phase 2 matcher.
+// when known" needs Phase 6 chain matching text extraction, not built — not
+// rendered rather than faked. Reason chips (§8, Phase 6) are optional: only
+// the "For your household" section passes match data.
 export type RecallCardData = {
   _id: Id<"recalls">;
   recallDate: string;
@@ -24,7 +25,15 @@ export type RecallCardData = {
   imageUrl?: string;
 };
 
-export function RecallCard({ recall }: { recall: RecallCardData }) {
+export function RecallCard({
+  recall,
+  matchedOn,
+  matchedDetails,
+}: {
+  recall: RecallCardData;
+  matchedOn?: MatchDimension[];
+  matchedDetails?: Partial<Record<MatchDimension, string[]>>;
+}) {
   const hasUpdates = recall.updateHistory.length > 1;
 
   return (
@@ -72,6 +81,9 @@ export function RecallCard({ recall }: { recall: RecallCardData }) {
             {HAZARD_TYPE_LABEL[recall.hazardType]}
           </span>
         </div>
+        {matchedOn && matchedOn.length > 0 && (
+          <ReasonChips matchedOn={matchedOn} matchedDetails={matchedDetails ?? {}} className="mt-2" />
+        )}
       </div>
     </Link>
   );

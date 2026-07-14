@@ -9,6 +9,7 @@ import { RiskLevelBadge } from "@/components/RiskLevelBadge";
 import { Timeline } from "@/components/Timeline";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { ShareButton } from "@/components/ShareButton";
+import { ReasonChips } from "@/components/ReasonChips";
 import { formatDate, formatGeography } from "@/lib/format";
 import {
   classifyRiskLevel,
@@ -16,6 +17,7 @@ import {
   RISK_GROUP_LABEL,
   RISK_LEVEL_DESCRIPTION,
   formatAllergenLabel,
+  chainMatchExplanation,
   type RiskGroup,
 } from "@/lib/copy";
 
@@ -28,6 +30,10 @@ export function RecallDetail() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const recall = useQuery(api.recalls.get, { id: params.id as Id<"recalls"> });
+  const match = useQuery(
+    api.feed.matchForAlert,
+    recall ? { alertId: recall._id, alertType: "recall" } : "skip",
+  );
 
   if (recall === undefined) return <DetailSkeleton />;
   if (recall === null) {
@@ -92,6 +98,17 @@ export function RecallDetail() {
           <p className="mt-2 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
             {RISK_LEVEL_DESCRIPTION[level]}
           </p>
+        )}
+
+        {match && (
+          <Section title="Matches your household">
+            <ReasonChips matchedOn={match.matchedOn} matchedDetails={match.matchedDetails} />
+            {match.matchedOn.includes("chain") && (
+              <p className="mt-2 text-xs" style={{ color: "var(--color-muted-foreground)" }}>
+                {chainMatchExplanation(match.matchedDetails.chain ?? [])}
+              </p>
+            )}
+          </Section>
         )}
 
         {recall.riskGroups.length > 0 && (

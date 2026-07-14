@@ -10,12 +10,11 @@ import { SourceHealthBanner } from "@/components/SourceHealthBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { CardListSkeleton } from "@/components/CardListSkeleton";
 import { DisclaimerFooter, FirstRunNotice } from "@/components/Disclaimer";
+import { HouseholdMatchSection } from "@/components/HouseholdMatchSection";
 
-// Feed (SPEC.md §8): one national feed, reverse-chronological, filter chips.
-// The "For your household" boosted section and reason chips arrive with a
-// focused personalization-UI follow-up (matcher output already exists) —
-// out of scope here. Phase 4 adds CDC outbreaks into the same feed with
-// "be aware" framing (§3, §11).
+// Feed (SPEC.md §8): one national feed, reverse-chronological, filter chips,
+// plus the "For your household" boosted section (Phase 6). Phase 4 adds CDC
+// outbreaks into the same feed with "be aware" framing (§3, §11).
 export default function FeedPage() {
   const [filters, setFilters] = useState<FeedFilters>({});
   const { results, status, loadMore } = usePaginatedQuery(
@@ -24,9 +23,18 @@ export default function FeedPage() {
     { initialNumItems: 20 },
   );
   const outbreaks = useQuery(api.outbreaks.list, {});
+  const context = useQuery(api.household.getMyContext, {});
+  const myMatches = useQuery(api.feed.myMatches, filters.matchedOnly ? {} : "skip");
+  const matchedIds = useMemo(
+    () =>
+      myMatches
+        ? new Set(myMatches.map((m) => (m.alertType === "recall" ? m.recall._id : m.outbreak._id)))
+        : null,
+    [myMatches],
+  );
 
   const hasActiveFilters = Boolean(
-    filters.state || filters.audience || filters.hazardType || filters.allergen,
+    filters.state || filters.audience || filters.hazardType || filters.allergen || filters.matchedOnly,
   );
 
   // Outbreaks carry no audience/hazardType/allergen fields, so a filter on
@@ -51,19 +59,29 @@ export default function FeedPage() {
       ...results.map((r): Entry => ({ kind: "recall", date: r.recallDate, recall: r })),
       ...filteredOutbreaks.map((o): Entry => ({ kind: "outbreak", date: o.publishedAt, outbreak: o })),
     ];
-    return entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [results, filteredOutbreaks]);
+    const sorted = entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    if (!filters.matchedOnly || !matchedIds) return sorted;
+    return sorted.filter((e) =>
+      matchedIds.has(e.kind === "recall" ? e.recall._id : e.outbreak._id),
+    );
+  }, [results, filteredOutbreaks, filters.matchedOnly, matchedIds]);
+
+  const isLoading =
+    status === "LoadingFirstPage" || (filters.matchedOnly && myMatches === undefined);
 
   return (
     <main>
       <FirstRunNotice />
       <SourceHealthBanner />
-      <FilterBar filters={filters} onChange={setFilters} />
+      {!filters.matchedOnly && <HouseholdMatchSection />}
+      <FilterBar filters={filters} onChange={setFilters} showMatchedFilter={context?.hasHousehold ?? false} />
 
-      {status === "LoadingFirstPage" ? (
+      {isLoading ? (
         <CardListSkeleton />
       ) : merged.length === 0 ? (
-        <EmptyState variant={hasActiveFilters ? "no-results" : "no-data"} />
+        <EmptyState
+          variant={filters.matchedOnly ? "no-household-matches" : hasActiveFilters ? "no-results" : "no-data"}
+        />
       ) : (
         <ul className="flex flex-col gap-3 px-4 pb-4">
           {merged.map((entry) =>

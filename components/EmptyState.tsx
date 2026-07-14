@@ -12,7 +12,11 @@ import { formatRelativeTime } from "@/lib/format";
  * explicit incompleteness — never implying "all clear" on data we can't
  * vouch for.
  */
-export function EmptyState({ variant }: { variant: "no-results" | "no-data" }) {
+export function EmptyState({
+  variant,
+}: {
+  variant: "no-results" | "no-data" | "no-household-matches";
+}) {
   const status = useQuery(api.sourceHealth.getPublicStatus);
 
   // Oldest last-success across sources — the most conservative honest claim.
@@ -22,7 +26,9 @@ export function EmptyState({ variant }: { variant: "no-results" | "no-data" }) {
       : null;
 
   const body =
-    variant === "no-results"
+    variant === "no-household-matches"
+      ? "Nothing currently matches your household preferences. That's not the same as “all clear” on the full feed — clear this filter to see everything."
+      : variant === "no-results"
       ? "No recalls match these filters. Try clearing one or two."
       : status && !status.allCurrent
         ? "Coverage incomplete — we can't confirm the feed is fully up to date yet. Nothing here should be read as “all clear.”"

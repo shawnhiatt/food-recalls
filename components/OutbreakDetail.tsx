@@ -9,6 +9,7 @@ import { OutbreakBadge } from "@/components/OutbreakBadge";
 import { Timeline } from "@/components/Timeline";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { ShareButton } from "@/components/ShareButton";
+import { ReasonChips } from "@/components/ReasonChips";
 import { formatDate, formatGeography, formatImpactLine } from "@/lib/format";
 import { OUTBREAK_STATUS_DESCRIPTION, RISK_GROUP_LABEL, type RiskGroup } from "@/lib/copy";
 
@@ -20,6 +21,10 @@ export function OutbreakDetail() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const outbreak = useQuery(api.outbreaks.get, { id: params.id as Id<"outbreaks"> });
+  const match = useQuery(
+    api.feed.matchForAlert,
+    outbreak ? { alertId: outbreak._id, alertType: "outbreak" } : "skip",
+  );
 
   if (outbreak === undefined) return <DetailSkeleton />;
   if (outbreak === null) {
@@ -81,6 +86,12 @@ export function OutbreakDetail() {
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
           {OUTBREAK_STATUS_DESCRIPTION[outbreak.status]}
         </p>
+
+        {match && (
+          <Section title="Matches your household">
+            <ReasonChips matchedOn={match.matchedOn} matchedDetails={match.matchedDetails} />
+          </Section>
+        )}
 
         {outbreak.riskGroups.length > 0 && (
           <Section title="Who's at risk?">
