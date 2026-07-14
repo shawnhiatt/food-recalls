@@ -6,10 +6,10 @@ import type { ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
-// SPEC.md §12: Feed / Scanner / Saved / Household, 4 tabs — Scanner appears
-// when built (Phase 7).
+// SPEC.md §12: Feed / Scanner / Saved / Household, 4 tabs.
 const TABS: Array<{ href: string; label: string; icon: (active: boolean) => ReactNode }> = [
   { href: "/", label: "Feed", icon: FeedIcon },
+  { href: "/scanner", label: "Scanner", icon: ScannerIcon },
   { href: "/saved", label: "Saved", icon: SavedIcon },
   { href: "/household", label: "Household", icon: HouseholdIcon },
 ];
@@ -85,6 +85,15 @@ function FeedIcon(active: boolean) {
       <path d="M4 12h16" />
       <path d="M4 16h10" />
       <path d="M4 20h7" />
+    </svg>
+  );
+}
+
+function ScannerIcon(active: boolean) {
+  return (
+    <svg {...iconProps(active)}>
+      <path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3" />
+      <path d="M8 8h8v8H8z" />
     </svg>
   );
 }

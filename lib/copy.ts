@@ -169,3 +169,14 @@ export function chainMatchExplanation(chains: string[]): string {
   const stores = chains.join(", ");
   return `Possible match — the recall notice mentions ${stores}, but government data doesn't confirm specific stores. Check the official notice.`;
 }
+
+// §11 Scanner copy (Phase 7): "No known recall" — never "safe" (§3) — plus
+// the same-manufacturer soft-match framing.
+export const NO_KNOWN_RECALL_COPY =
+  "No known recall for this barcode. Recalls don't always include barcodes, so also check brand and lot number.";
+
+export function sameManufacturerExplanation(firms: string[]): string {
+  const unique = [...new Set(firms)];
+  const who = unique.length === 1 ? unique[0] : `${unique.length} companies`;
+  return `Possible match — this isn't the exact recalled product, but ${who} has another active recall right now. Worth a look.`;
+}

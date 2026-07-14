@@ -390,6 +390,10 @@ export const exportData = query({
       .query("bookmarks")
       .withIndex("by_member", (q) => q.eq("memberId", member._id))
       .collect();
+    const pantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_household", (q) => q.eq("householdId", household._id))
+      .collect();
 
     return {
       exportedAt: new Date().toISOString(),
@@ -410,6 +414,12 @@ export const exportData = query({
         alertId: b.alertId,
         alertType: b.alertType,
         createdAt: b.createdAt,
+      })),
+      pantry: pantryItems.map((p) => ({
+        upc: p.upc,
+        productName: p.productName,
+        brand: p.brand,
+        scannedAt: p.scannedAt,
       })),
     };
   },
@@ -472,6 +482,11 @@ export const deleteAccount = mutation({
         .withIndex("by_household", (q) => q.eq("householdId", householdId))
         .collect();
       for (const invite of invites) await ctx.db.delete(invite._id);
+      const pantryItems = await ctx.db
+        .query("pantryItems")
+        .withIndex("by_household", (q) => q.eq("householdId", householdId))
+        .collect();
+      for (const item of pantryItems) await ctx.db.delete(item._id);
       await ctx.db.delete(householdId);
       deletedHousehold = true;
     }

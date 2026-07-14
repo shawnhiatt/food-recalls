@@ -139,13 +139,16 @@ convex/
   notifications.ts     Dispatch (§9): matcher × decision matrix, per-revision
                        dedupe, instant email + daily digest, operator alerts
   sourceHealth.ts      Data-health contract (SPEC.md §10) + public status query
-  household.ts         Secret-gated read-only household summary (SPEC.md §2)
-  bookmarks.ts         Public bookmark list/toggle (single-household pilot);
-                       resolves both recall and outbreak alertTypes
+  household.ts         Auth-gated household summary/edit/export/delete (SPEC.md §2, Phase 5)
+  bookmarks.ts         Public bookmark list/toggle; resolves both recall and outbreak alertTypes
+  feed.ts              §8 "For your household" matching (Phase 6): reactive
+                       per-household queries feeding reason chips + the pinned section
+  pantry.ts            Scanner/pantry (Phase 7): UPC scan, same-manufacturer
+                       soft match, live auto-matching against active recalls
   seed.ts              Pilot household seed, structured as the §11 questionnaire
-app/                    Next.js App Router — Feed / Detail / Saved / Household /
-                       Outbreak detail, PWA manifest + generated icons, Serwist
-                       service worker
+app/                    Next.js App Router — Feed / Scanner / Saved / Household /
+                       Detail / Outbreak detail, PWA manifest + generated icons,
+                       Serwist service worker
 components/             Shared UI (RecallCard, OutbreakCard, Timeline, FilterBar, etc.)
 lib/                    Frontend-only copy/format helpers (not imported from convex/)
 tests/
@@ -328,7 +331,28 @@ Ingest-first, auth-last (SPEC.md §13; exit criteria in §14):
       unchanged: severity styling and share flows were already fully built
       (Phase 4's severity system; `ShareButton` on both Detail views since
       Phase 1) — audited, not rebuilt.
-- [ ] **Phase 7** — Barcode scanner & pantry
+- [ ] **Phase 7** — Barcode scanner & pantry. Shipped: a **Scanner** tab
+      (`app/scanner/page.tsx`, now the 4th `BottomNav` entry) with camera
+      barcode scanning (`components/BarcodeScanner.tsx`, ZXing's
+      `BrowserMultiFormatReader` dynamically imported on that route only —
+      chosen over the native `BarcodeDetector` API because that's
+      Chrome/Android-only and this app targets iOS-installed PWAs too, per
+      Phase 3) plus manual UPC entry that's always available, feature-detected
+      the same way `ShareButton` degrades. `convex/pantry.ts` implements the
+      §3 fallback chain: an exact-UPC check against active recalls'
+      `productCodes` first (no external call needed); only on a miss does it
+      look up the product's brand via Open Food Facts (same source as the
+      Phase 1 image fallback) and try a same-manufacturer soft match
+      ("possible" confidence). Every scan persists to `pantryItems` — one
+      table doubling as scan history and current pantry contents, per the
+      schema's design — and `pantry.matches` is a **live reactive query**,
+      so a pantry item auto-matches the moment a matching recall is
+      ingested, with zero extra wiring (verified by fixture test, §14). Copy
+      follows §11 exactly: "No known recall" (never "safe") on a miss, a
+      "possible match" framing on the soft match. Account deletion/export
+      (§2) extended to cover pantry data. `convex/lib/pantry.ts` (pure
+      matching) + `convex/pantry.ts` covered by 14 new tests; 249 tests
+      green overall.
 
 **Phases 0–4 were a private pilot** (no public signup; preference-reading functions
 were secret-gated). **Phase 5 is the public gate**: Convex Auth + per-household
