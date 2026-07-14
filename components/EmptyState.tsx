@@ -15,7 +15,7 @@ import { formatRelativeTime } from "@/lib/format";
 export function EmptyState({
   variant,
 }: {
-  variant: "no-results" | "no-data" | "no-household-matches";
+  variant: "no-results" | "no-data" | "no-household-matches" | "no-search-results";
 }) {
   const status = useQuery(api.sourceHealth.getPublicStatus);
 
@@ -28,6 +28,8 @@ export function EmptyState({
   const body =
     variant === "no-household-matches"
       ? "Nothing currently matches your household preferences. That's not the same as “all clear” on the full feed — clear this filter to see everything."
+      : variant === "no-search-results"
+      ? "Nothing matches that search. Try fewer or different words — a product, brand, company, or barcode — or check the spelling."
       : variant === "no-results"
       ? "No recalls match these filters. Try clearing one or two."
       : status && !status.allCurrent

@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import { normalizedRecallFields, hazardTypeValidator } from "./schema";
 import type { NormalizedRecall } from "./adapters/types";
 import { isFreshForNotification } from "./lib/matching";
-import { buildRecallSearchText } from "./lib/search";
+import { buildRecallSearchText, normalizeSearchQuery } from "./lib/search";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4):
 //   hash unchanged  → touch updatedAt only (no timeline entry, per §9 matrix)
@@ -358,5 +358,29 @@ export const get = query({
   args: { id: v.id("recalls") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Full-text search over recalls (§10: archived alerts stay reachable via
+ * search). Unlike `list`, this deliberately spans active AND archived recalls
+ * — reaching resolved/older recalls is the whole point — so it applies no
+ * lifecycle cutoff. Paginated the same way as the feed. An empty query returns
+ * an empty page rather than erroring the search index; the client also skips.
+ */
+export const search = query({
+  args: {
+    query: v.string(),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const term = normalizeSearchQuery(args.query);
+    if (!term) {
+      return { page: [] as Doc<"recalls">[], isDone: true, continueCursor: "" };
+    }
+    return await ctx.db
+      .query("recalls")
+      .withSearchIndex("search_text", (q) => q.search("searchText", term))
+      .paginate(args.paginationOpts);
   },
 });

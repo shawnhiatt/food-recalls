@@ -119,3 +119,24 @@ describe("outbreaks public list/get", () => {
     expect(list).toHaveLength(0);
   });
 });
+
+describe("outbreaks.search (§10)", () => {
+  test("finds an outbreak by title word, including archived ones the list hides", async () => {
+    const t = setupConvex();
+    // Resolved + old → excluded from outbreaks.list, but search must still reach it.
+    const record = { ...blueberriesOutbreak(), status: "resolved" as const, publishedAt: "2020-01-01" };
+    await t.mutation(internal.outbreaks.upsertBatch, { records: [record] });
+
+    expect(await t.query(api.outbreaks.list, {})).toHaveLength(0);
+
+    const hits = await t.query(api.outbreaks.search, { query: "blueberries" });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.title).toBe(record.title);
+  });
+
+  test("a blank query returns no results", async () => {
+    const t = setupConvex();
+    await t.mutation(internal.outbreaks.upsertBatch, { records: [blueberriesOutbreak()] });
+    expect(await t.query(api.outbreaks.search, { query: "  " })).toEqual([]);
+  });
+});

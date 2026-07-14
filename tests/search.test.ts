@@ -7,20 +7,20 @@ import { matchArchivedByUpc } from "../convex/lib/pantry";
 // index. Both are pure — the live searchIndex path is covered in pantry.test.ts.
 
 describe("buildRecallSearchText (§10)", () => {
-  test("concatenates title, firm, description, and every barcode", () => {
+  test("concatenates title, firm, description, and every barcode, lowercased", () => {
     const text = buildRecallSearchText({
       title: "Peanut Butter Recall",
       firm: "Acme Foods",
       productDesc: "16oz creamy jars",
       productCodes: ["012345678905", "099999999999"],
     });
-    expect(text).toBe("Peanut Butter Recall Acme Foods 16oz creamy jars 012345678905 099999999999");
+    expect(text).toBe("peanut butter recall acme foods 16oz creamy jars 012345678905 099999999999");
   });
 
   test("drops blank/whitespace-only parts so tokens stay clean", () => {
     expect(
       buildRecallSearchText({ title: "  Title ", firm: "", productDesc: "   ", productCodes: [""] }),
-    ).toBe("Title");
+    ).toBe("title");
   });
 
   test("caps pathological lengths", () => {
@@ -31,15 +31,15 @@ describe("buildRecallSearchText (§10)", () => {
 });
 
 describe("buildOutbreakSearchText (§10)", () => {
-  test("includes title, pathogen, and suspected food when present", () => {
+  test("includes title, pathogen, and suspected food when present, lowercased", () => {
     expect(
-      buildOutbreakSearchText({ title: "Listeria outbreak", pathogen: "Listeria", suspectedFood: "cantaloupe" }),
-    ).toBe("Listeria outbreak Listeria cantaloupe");
+      buildOutbreakSearchText({ title: "Listeria outbreak", pathogen: "Listeria", suspectedFood: "Cantaloupe" }),
+    ).toBe("listeria outbreak listeria cantaloupe");
   });
 
   test("omits an absent suspected food", () => {
     expect(buildOutbreakSearchText({ title: "E. coli", pathogen: "E. coli O157" })).toBe(
-      "E. coli E. coli O157",
+      "e. coli e. coli o157",
     );
   });
 });

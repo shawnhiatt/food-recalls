@@ -4,7 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import { normalizedOutbreakFields } from "./schema";
 import type { NormalizedOutbreak } from "./adapters/cdc";
 import { deepEqual, type UpsertCounts } from "./recalls";
-import { buildOutbreakSearchText } from "./lib/search";
+import { buildOutbreakSearchText, normalizeSearchQuery } from "./lib/search";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4,
 // Phase 4), mirroring convex/recalls.ts's upsertBatch. All functions here are
@@ -169,5 +169,23 @@ export const get = query({
   args: { id: v.id("outbreaks") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Full-text search over outbreaks (§10), the outbreak counterpart to
+ * recalls.search. The table is tiny (§3: CDC only lists current
+ * investigations), so like `list` it isn't paginated — the search page merges
+ * the top hits into the paginated recall stream by date.
+ */
+export const search = query({
+  args: { query: v.string() },
+  handler: async (ctx, args) => {
+    const term = normalizeSearchQuery(args.query);
+    if (!term) return [];
+    return await ctx.db
+      .query("outbreaks")
+      .withSearchIndex("search_text", (q) => q.search("searchText", term))
+      .take(20);
   },
 });

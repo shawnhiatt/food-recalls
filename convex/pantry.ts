@@ -10,6 +10,7 @@ import {
   type PantryMatch,
   type PantryMatchableRecall,
 } from "./lib/pantry";
+import { normalizeSearchQuery } from "./lib/search";
 
 // Scanner & pantry (SPEC.md §12 Scanner tab, §7 pantry dimension, Phase 7).
 // Every scan is persisted to `pantryItems` — the single table doubles as
@@ -65,7 +66,9 @@ export const matchArchived = internalQuery({
   handler: async (ctx, args): Promise<ArchivedRecallMatch[]> => {
     const hits = await ctx.db
       .query("recalls")
-      .withSearchIndex("search_text", (q) => q.search("searchText", args.upc))
+      .withSearchIndex("search_text", (q) =>
+        q.search("searchText", normalizeSearchQuery(args.upc)),
+      )
       .take(ARCHIVED_SCAN_SEARCH_LIMIT);
     return matchArchivedByUpc(
       args.upc,

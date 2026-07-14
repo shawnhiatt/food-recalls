@@ -112,6 +112,52 @@ describe("recalls.list", () => {
   });
 });
 
+describe("recalls.search (§10)", () => {
+  test("finds by word and by barcode, and reaches ARCHIVED recalls the feed hides", async () => {
+    const t = setupConvex();
+    await seedRecalls(t, [
+      // Non-active + years old → excluded from recalls.list, but search must reach it.
+      recall({
+        sourceId: "pb",
+        title: "Peanut Butter Recall",
+        lifecycle: "completed",
+        recallDate: "2019-01-01",
+        productCodes: ["012345678905"],
+      }),
+      recall({ sourceId: "salsa", title: "Salsa Recall", firm: "Green Valley Foods" }),
+    ]);
+
+    const byWord = await t.query(api.recalls.search, {
+      query: "peanut",
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(byWord.page.map((r) => r.sourceId)).toEqual(["pb"]);
+
+    const byFirm = await t.query(api.recalls.search, {
+      query: "valley",
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(byFirm.page.map((r) => r.sourceId)).toEqual(["salsa"]);
+
+    const byUpc = await t.query(api.recalls.search, {
+      query: "012345678905",
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(byUpc.page.map((r) => r.sourceId)).toEqual(["pb"]);
+  });
+
+  test("a blank query returns an empty page instead of erroring the index", async () => {
+    const t = setupConvex();
+    await seedRecalls(t, [recall({ sourceId: "x" })]);
+    const page = await t.query(api.recalls.search, {
+      query: "   ",
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(page.page).toEqual([]);
+    expect(page.isDone).toBe(true);
+  });
+});
+
 describe("recalls.get", () => {
   test("returns the full doc including updateHistory, or null when missing", async () => {
     const t = setupConvex();

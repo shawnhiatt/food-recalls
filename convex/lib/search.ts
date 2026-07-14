@@ -9,12 +9,22 @@
 // descriptions run to a few hundred chars, so this only bites pathological rows.
 const MAX_SEARCH_TEXT = 8000;
 
+// Lowercased on the way in. Convex's real search index already matches
+// case-insensitively, so this is a no-op there — but it keeps the stored text
+// and the (also-lowercased) query term on equal footing, which the callers rely
+// on. Callers must pass the query through `normalizeSearchQuery` to match.
 function join(parts: Array<string | undefined>): string {
   return parts
     .map((s) => s?.trim())
     .filter((s): s is string => Boolean(s))
     .join(" ")
+    .toLowerCase()
     .slice(0, MAX_SEARCH_TEXT);
+}
+
+/** Normalize a user's query the same way `searchText` is stored (see `join`). */
+export function normalizeSearchQuery(query: string): string {
+  return query.trim().toLowerCase();
 }
 
 export type RecallSearchFields = {
