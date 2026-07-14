@@ -49,6 +49,9 @@ urgency, not spec order.
       model an `outbreak` alertType and §4 says active outbreaks are "Class I
       equivalent for alerting," but instant/digest delivery was never wired
       through `convex/notifications.ts` for outbreaks — recalls only.
+      Concrete implementation plan (scoped 2026-07-14, larger than it looks —
+      ripples through the §9 digest/email trust core): see
+      [docs/outbreak-notification-dispatch.md](docs/outbreak-notification-dispatch.md).
 - [ ] **Real-device push verification** (iOS-installed PWA + Android) and a fresh
       Lighthouse ≥90 pass across all categories (§14 Phase 3 exit criteria,
       never actually run on physical hardware).
