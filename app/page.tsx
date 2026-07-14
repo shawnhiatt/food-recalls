@@ -17,9 +17,13 @@ import { HouseholdMatchSection } from "@/components/HouseholdMatchSection";
 // outbreaks into the same feed with "be aware" framing (§3, §11).
 export default function FeedPage() {
   const [filters, setFilters] = useState<FeedFilters>({});
+  // `matchedOnly` is a frontend-only concept (client-side filter over the
+  // fetched page, applied below) — recalls.list's validator only knows
+  // state/audience/hazardType/allergen, so it must never be forwarded.
+  const { state, audience, hazardType, allergen } = filters;
   const { results, status, loadMore } = usePaginatedQuery(
     api.recalls.list,
-    { filters },
+    { filters: { state, audience, hazardType, allergen } },
     { initialNumItems: 20 },
   );
   const outbreaks = useQuery(api.outbreaks.list, {});
@@ -73,7 +77,9 @@ export default function FeedPage() {
     <main>
       <FirstRunNotice />
       <SourceHealthBanner />
-      {!filters.matchedOnly && <HouseholdMatchSection />}
+      {!filters.matchedOnly && (
+        <HouseholdMatchSection onSeeAll={() => setFilters({ ...filters, matchedOnly: true })} />
+      )}
       <FilterBar filters={filters} onChange={setFilters} showMatchedFilter={context?.hasHousehold ?? false} />
 
       {isLoading ? (
