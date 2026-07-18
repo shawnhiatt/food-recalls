@@ -134,7 +134,7 @@ convex/
   recalls.ts           Upsert (internal) + public list/get (Phase 1 feed);
                        schedules notification dispatch on new/updated recalls
   outbreaks.ts         CDC outbreak upsert (internal) + public list/get (Phase 4);
-                       notification dispatch intentionally not yet wired, see below
+                       schedules outbreak notification dispatch on new/resolved
   press.ts             FDA press-release enrichment: photo/risk-group/notice-URL
                        patches onto matching recalls; relink for late API records
   notifications.ts     Dispatch (§9): matcher × decision matrix, per-revision
@@ -263,11 +263,11 @@ which is the single working backlog now:
       alert types.
       **Deliberately deferred** (tracked here rather than silently dropped,
       same as prior phases' open items): (1) **outbreak notification
-      dispatch** — `notificationsSent`/`digestQueue` already model an
-      `outbreak` alertType and §4 specifies "active outbreaks treated as
-      Class I equivalent for alerting," but wiring instant/digest delivery
-      through `convex/notifications.ts` is left for a focused follow-up
-      rather than bundled into this phase; (2) **per-state case counts** —
+      dispatch** — *shipped 2026-07-18 (TODO #8)*: `dispatchForOutbreak`
+      wires instant email/push + a resolution digest line through
+      `convex/notifications.ts`, gated by the household `outbreaks` toggle and
+      treating active outbreaks as Class I-equivalent (§4); (2) **per-state
+      case counts** —
       CDC's own state-by-state breakdown is rendered by a client-side chart
       widget fed from a per-outbreak JSON file whose path isn't derivable
       from the investigation's URL, so `states` is a best-effort extraction

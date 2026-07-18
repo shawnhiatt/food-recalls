@@ -61,6 +61,39 @@ export type MatchableAlert = {
   distribution?: string;
 };
 
+/**
+ * Adapt an outbreak into the matcher's generic `MatchableAlert` (§7 Phase 4).
+ * Outbreaks present as human-audience alerts (so the humanFood category gate
+ * applies — the separate `categories.outbreaks` toggle is checked upstream in
+ * the dispatch layer) with no firm/allergens/distribution; their `suspectedFood`
+ * feeds brand/keyword text and their `riskGroups` feed the hard floor.
+ */
+export type OutbreakMatchInput = {
+  states: string[];
+  suspectedFood?: string;
+  riskGroups: string[];
+};
+
+export function outbreakToMatchable(o: OutbreakMatchInput): MatchableAlert {
+  return {
+    audience: "human",
+    states: o.states,
+    productDesc: "",
+    firm: "",
+    allergens: [],
+    riskGroups: o.riskGroups,
+    suspectedFood: o.suspectedFood,
+    distribution: undefined,
+  };
+}
+
+/**
+ * §4: "active outbreaks are Class I equivalent for alerting." Severity only
+ * ever drives dispatch for an active outbreak (resolved ones never notify as
+ * new), so this is a constant rather than a status switch.
+ */
+export const OUTBREAK_ALERT_SEVERITY: Severity = "class1";
+
 // Shape the matcher needs from householdPreferences.
 export type MatchablePrefs = {
   states: string[];

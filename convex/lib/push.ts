@@ -39,3 +39,24 @@ export function renderPushPayload(alert: PushAlert): PushPayload {
     tag: alert.tag,
   };
 }
+
+/**
+ * Outbreak push (§4 Phase 4/§11). Same redaction rule — product/title, deep
+ * link, tag only, never match reasons — but a "be aware" framing rather than a
+ * recall severity label, since a CDC investigation isn't a confirmed recall.
+ */
+export type OutbreakPushAlert = {
+  title: string;
+  url: string;
+  /** Outbreak id — the notification tag, so a later revision replaces the earlier. */
+  tag: string;
+};
+
+export function renderOutbreakPushPayload(alert: OutbreakPushAlert): PushPayload {
+  return {
+    title: "Active outbreak — be aware",
+    body: alert.title,
+    url: alert.url,
+    tag: alert.tag,
+  };
+}

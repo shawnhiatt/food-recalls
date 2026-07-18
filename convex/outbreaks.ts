@@ -1,9 +1,11 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { normalizedOutbreakFields } from "./schema";
 import type { NormalizedOutbreak } from "./adapters/cdc";
 import { deepEqual, type UpsertCounts } from "./recalls";
+import { isFreshForNotification } from "./lib/matching";
 import { buildOutbreakSearchText, normalizeSearchQuery } from "./lib/search";
 
 // Upsert on (source, sourceId) with content-hash revisioning (SPEC.md §4,
@@ -11,14 +13,12 @@ import { buildOutbreakSearchText, normalizeSearchQuery } from "./lib/search";
 // internal except the read-only feed/detail queries at the bottom (outbreak
 // data is public government data, same posture as recalls.list/get, §2).
 //
-// Notification dispatch for outbreaks is INTENTIONALLY DEFERRED in this
-// phase: the §9 decision matrix and matchRecall() already generalize to
-// outbreak-shaped alerts (matching.test.ts covers this), and the
-// notificationsSent/digestQueue schema already has an 'outbreak' alertType
-// waiting for it, but wiring instant/digest delivery is left for a focused
-// follow-up rather than bundled in here (see README.md's Phase 4 entry).
-// upsertBatch therefore never calls ctx.scheduler — new/updated outbreaks
-// only become visible via the reactive `list`/`get` queries below.
+// Notification dispatch (TODO #8, 2026-07-18): upsertBatch schedules
+// internal.notifications.dispatchForOutbreak on a fresh active insert ('new'),
+// a material revision to an active outbreak ('material'), and an active→resolved
+// transition ('resolution'). The §9 matcher/router already generalize to
+// outbreak-shaped alerts; dispatchForOutbreak adds the outbreak-specific gate
+// (categories.outbreaks) and Class I-equivalent severity (§4).
 
 /** Human summary of what changed between revisions — powers the Timeline view. */
 function diffSummary(prev: NormalizedOutbreak, next: NormalizedOutbreak): string {
@@ -66,7 +66,7 @@ export const upsertBatch = internalMutation({
         .unique();
 
       if (existing === null) {
-        await ctx.db.insert("outbreaks", {
+        const id = await ctx.db.insert("outbreaks", {
           ...record,
           searchText: buildOutbreakSearchText(record),
           updateHistory: [
@@ -81,6 +81,14 @@ export const upsertBatch = internalMutation({
           updatedAt: now,
         });
         counts.inserted++;
+        // Notify only on recently-published ACTIVE outbreaks (§4/§9). The
+        // recency guard keeps a historical backfill from blasting old ones.
+        if (record.status === "active" && isFreshForNotification(record.publishedAt, now)) {
+          await ctx.scheduler.runAfter(0, internal.notifications.dispatchForOutbreak, {
+            outbreakId: id,
+            event: "new",
+          });
+        }
         continue;
       }
 
@@ -116,6 +124,23 @@ export const upsertBatch = internalMutation({
         updatedAt: now,
       });
       counts.materialUpdates++;
+      // §9 routing: an active→resolved transition is a resolution (digest
+      // closure line for previously-notified members); any other update to a
+      // still-active outbreak re-evaluates as a material change. A still-
+      // resolved outbreak edited again is timeline-only (no dispatch).
+      const becameResolved =
+        existing.status === "active" && record.status === "resolved";
+      if (becameResolved) {
+        await ctx.scheduler.runAfter(0, internal.notifications.dispatchForOutbreak, {
+          outbreakId: existing._id,
+          event: "resolution",
+        });
+      } else if (record.status === "active") {
+        await ctx.scheduler.runAfter(0, internal.notifications.dispatchForOutbreak, {
+          outbreakId: existing._id,
+          event: "material",
+        });
+      }
     }
 
     return counts;

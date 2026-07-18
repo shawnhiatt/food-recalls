@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import {
   normalizeOutbreak,
@@ -13,6 +13,16 @@ import closedHtml from "./fixtures/cdc/outbreak-detail-closed.html?raw";
 // Mirrors tests/upsert.test.ts's coverage for convex/outbreaks.ts's
 // upsertBatch: content-hash revisioning (§4, §14 hash stability), applied to
 // outbreak-shaped records instead of recalls.
+//
+// upsertBatch now schedules outbreak notification dispatch on fresh active
+// inserts and status transitions (§9, TODO #8). Pin the clock and drain any
+// scheduled dispatch so these revisioning tests stay about revisioning and no
+// scheduled write leaks past teardown — same pattern as tests/upsert.test.ts.
+beforeEach(() => vi.useFakeTimers({ now: new Date("2026-07-11T12:00:00Z") }));
+afterEach(() => vi.useRealTimers());
+
+const drain = (t: ReturnType<typeof setupConvex>) =>
+  t.finishAllScheduledFunctions(vi.runAllTimers);
 
 function blueberriesOutbreak() {
   const item = parseOutbreakListItems(listHtml).find((i) => i.title.includes("Blueberries"))!;
@@ -33,6 +43,7 @@ describe("outbreaks.upsertBatch revisioning", () => {
     expect(doc!.updateHistory).toHaveLength(1);
     expect(doc!.updateHistory[0]).toMatchObject({ label: "Outbreak", summary: "Initial listing" });
     expect(doc!.status).toBe("active");
+    await drain(t);
   });
 
   test("re-running ingest on unchanged data produces zero new revisions", async () => {
@@ -45,6 +56,7 @@ describe("outbreaks.upsertBatch revisioning", () => {
 
     const doc = await t.query(internal.outbreaks.getBySourceId, { sourceId: record.sourceId });
     expect(doc!.updateHistory).toHaveLength(1);
+    await drain(t);
   });
 
   test("material update (status change) appends a labeled timeline entry", async () => {
@@ -67,6 +79,7 @@ describe("outbreaks.upsertBatch revisioning", () => {
     const update = doc!.updateHistory[1]!;
     expect(update.label).toBe("Update 1");
     expect(update.summary).toContain("Investigation status changed from active to resolved");
+    await drain(t);
   });
 
   test("hash change with identical raw snapshot is a silent refresh, not a material update", async () => {
@@ -86,6 +99,7 @@ describe("outbreaks.upsertBatch revisioning", () => {
     expect(doc!.contentHash).toBe("post-enrichment-change-hash");
     expect(doc!.riskGroups).toContain("pregnant");
     expect(doc!.updateHistory).toHaveLength(1); // no fabricated revision
+    await drain(t);
   });
 
   test("hasAny reports false before any outbreak exists, true after", async () => {
@@ -93,6 +107,7 @@ describe("outbreaks.upsertBatch revisioning", () => {
     expect(await t.query(internal.outbreaks.hasAny, {})).toBe(false);
     await t.mutation(internal.outbreaks.upsertBatch, { records: [blueberriesOutbreak()] });
     expect(await t.query(internal.outbreaks.hasAny, {})).toBe(true);
+    await drain(t);
   });
 });
 
@@ -108,6 +123,7 @@ describe("outbreaks public list/get", () => {
 
     const doc = await t.query(api.outbreaks.get, { id: list[0]!._id });
     expect(doc!.pathogen).toBe("E. coli");
+    await drain(t);
   });
 
   test("a resolved outbreak past the archive window drops out of list", async () => {
@@ -117,6 +133,7 @@ describe("outbreaks public list/get", () => {
 
     const list = await t.query(api.outbreaks.list, {});
     expect(list).toHaveLength(0);
+    await drain(t);
   });
 });
 
@@ -132,11 +149,13 @@ describe("outbreaks.search (§10)", () => {
     const hits = await t.query(api.outbreaks.search, { query: "blueberries" });
     expect(hits).toHaveLength(1);
     expect(hits[0]!.title).toBe(record.title);
+    await drain(t);
   });
 
   test("a blank query returns no results", async () => {
     const t = setupConvex();
     await t.mutation(internal.outbreaks.upsertBatch, { records: [blueberriesOutbreak()] });
     expect(await t.query(api.outbreaks.search, { query: "  " })).toEqual([]);
+    await drain(t);
   });
 });

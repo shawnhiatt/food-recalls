@@ -120,3 +120,45 @@ export function renderInstantText(
   }
   return lines.join("\n");
 }
+
+// Outbreak instant copy (§4 Phase 4/§11). Distinct "be aware" voice — a CDC
+// investigation is not a confirmed recall, so it never borrows the recall's
+// severity label or "recall" wording.
+export type OutbreakInstantAlert = {
+  title: string;
+  pathogen: string;
+  matchedOn: MatchDimension[];
+  url: string;
+};
+
+export function outbreakInstantSubject(alert: OutbreakInstantAlert): string {
+  return `[Be aware] Outbreak: ${alert.title}`;
+}
+
+export function renderOutbreakInstantText(
+  alert: OutbreakInstantAlert,
+  householdName: string,
+  unsubscribeUrl?: string,
+): string {
+  const reasons = alert.matchedOn.map((d) => DIMENSION_LABEL[d]).join(", ");
+  const lines = [
+    `Food Recalls — an active outbreak may affect ${householdName}.`,
+    "",
+    `Be aware: ${alert.title}`,
+    `Pathogen: ${alert.pathogen}`,
+  ];
+  if (reasons) lines.push(`Flagged because it involves: ${reasons}.`);
+  lines.push("");
+  lines.push(
+    "Investigators may not have confirmed a specific product yet — this is an early heads-up, not a recall.",
+  );
+  lines.push(`Follow the investigation: ${alert.url}`);
+  lines.push("");
+  lines.push(
+    "Data from CDC — unvalidated, not an official alerting service. Verify against the official notice.",
+  );
+  if (unsubscribeUrl) {
+    lines.push(`Unsubscribe from these emails: ${unsubscribeUrl}`);
+  }
+  return lines.join("\n");
+}

@@ -29,7 +29,32 @@ export type DigestClosureItem = {
   url: string;
 };
 
-export type DigestItem = DigestMatchItem | DigestClosureItem;
+/**
+ * One matched OUTBREAK line (§4 Phase 4/§11). Outbreaks get a distinct "be
+ * aware" voice — no recall-style severity label — so they render in their own
+ * section rather than mixed into "recalls affect your household." Carries
+ * `pathogen` where a recall carries `firm`.
+ */
+export type DigestOutbreakItem = {
+  kind: "outbreak";
+  title: string;
+  pathogen: string;
+  matchedOn: MatchDimension[];
+  url: string;
+};
+
+/** One outbreak resolution line — the outbreak analog of DigestClosureItem. */
+export type DigestOutbreakClosureItem = {
+  kind: "outbreak_closure";
+  title: string;
+  url: string;
+};
+
+export type DigestItem =
+  | DigestMatchItem
+  | DigestClosureItem
+  | DigestOutbreakItem
+  | DigestOutbreakClosureItem;
 
 export type SourceStatusLine = {
   source: Source;
@@ -134,14 +159,24 @@ export function isDigestDue(params: {
   return true;
 }
 
-/** Order matched items by severity, then keep a stable input order. */
+/**
+ * Order items for display: recall matches (by severity), then outbreak matches,
+ * then all closures (recall + outbreak). Keeps recall-only inputs identical to
+ * the pre-outbreak behavior.
+ */
 export function sortDigestItems(items: DigestItem[]): DigestItem[] {
   const matches = items.filter((i): i is DigestMatchItem => i.kind === "match");
+  const outbreaks = items.filter(
+    (i): i is DigestOutbreakItem => i.kind === "outbreak",
+  );
   const closures = items.filter(
     (i): i is DigestClosureItem => i.kind === "closure",
   );
+  const outbreakClosures = items.filter(
+    (i): i is DigestOutbreakClosureItem => i.kind === "outbreak_closure",
+  );
   matches.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
-  return [...matches, ...closures];
+  return [...matches, ...outbreaks, ...closures, ...outbreakClosures];
 }
 
 /**
@@ -151,10 +186,22 @@ export function sortDigestItems(items: DigestItem[]): DigestItem[] {
  */
 export function digestSubject(input: DigestInput): string {
   const matchCount = input.items.filter((i) => i.kind === "match").length;
+  const outbreakCount = input.items.filter((i) => i.kind === "outbreak").length;
+
+  if (matchCount > 0 && outbreakCount > 0) {
+    const r = matchCount === 1 ? "1 recall" : `${matchCount} recalls`;
+    const o = outbreakCount === 1 ? "1 outbreak" : `${outbreakCount} outbreaks`;
+    return `${r} and ${o} affect your household`;
+  }
   if (matchCount > 0) {
     return matchCount === 1
       ? "1 new recall affects your household"
       : `${matchCount} new recalls affect your household`;
+  }
+  if (outbreakCount > 0) {
+    return outbreakCount === 1
+      ? "1 active outbreak may affect your household"
+      : `${outbreakCount} active outbreaks may affect your household`;
   }
   return input.allSourcesCurrent
     ? "You're all clear — no new recalls affect your household"
@@ -201,17 +248,27 @@ export function renderDigestText(input: DigestInput): string {
   const matches = sorted.filter(
     (i): i is DigestMatchItem => i.kind === "match",
   );
+  const outbreaks = sorted.filter(
+    (i): i is DigestOutbreakItem => i.kind === "outbreak",
+  );
   const closures = sorted.filter(
     (i): i is DigestClosureItem => i.kind === "closure",
+  );
+  const outbreakClosures = sorted.filter(
+    (i): i is DigestOutbreakClosureItem => i.kind === "outbreak_closure",
   );
 
   const lines: string[] = [];
   lines.push(`Food Recalls — daily digest for ${input.householdName}`);
   lines.push("");
 
-  if (matches.length === 0) {
+  // Reassurance only when there are no alerts of EITHER kind (§10). Outbreak
+  // matches count as alerts, so they suppress the "all clear" line too.
+  if (matches.length === 0 && outbreaks.length === 0) {
     lines.push(reassuranceLine(input));
-  } else {
+  }
+
+  if (matches.length > 0) {
     lines.push(
       matches.length === 1
         ? "1 new recall affects your household:"
@@ -229,11 +286,29 @@ export function renderDigestText(input: DigestInput): string {
     }
   }
 
-  if (closures.length > 0) {
+  // Outbreaks in their own "be aware" section (§11) — no risk-class label,
+  // since CDC investigations often precede or never become a confirmed recall.
+  if (outbreaks.length > 0) {
+    if (matches.length > 0) lines.push("");
+    lines.push("Active outbreaks to be aware of:");
+    lines.push("");
+    for (const item of outbreaks) {
+      const reasons = item.matchedOn.map((d) => DIMENSION_LABEL[d]).join(", ");
+      lines.push(`• ${item.title} — ${item.pathogen}`);
+      if (reasons) lines.push(`  Why: ${reasons}`);
+      lines.push(`  ${item.url}`);
+    }
+  }
+
+  if (closures.length > 0 || outbreakClosures.length > 0) {
     lines.push("");
     lines.push("Resolved / updated since your last digest:");
     for (const item of closures) {
       lines.push(`• ${item.title} — ${LIFECYCLE_LABEL[item.lifecycle]}`);
+      lines.push(`  ${item.url}`);
+    }
+    for (const item of outbreakClosures) {
+      lines.push(`• ${item.title} — investigation closed`);
       lines.push(`  ${item.url}`);
     }
   }

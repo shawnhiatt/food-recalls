@@ -5,8 +5,10 @@ import type { Doc, Id } from "./_generated/dataModel";
 import {
   decideRoute,
   matchRecall,
+  outbreakToMatchable,
   severityOf,
   isFreshForNotification,
+  OUTBREAK_ALERT_SEVERITY,
   type MatchDimension,
   type MatchResult,
   type Severity,
@@ -20,12 +22,15 @@ import {
 } from "./lib/digest";
 import {
   instantSubject,
+  outbreakInstantSubject,
   renderInstantText,
+  renderOutbreakInstantText,
   sendEmail,
   type EmailMessage,
   type InstantAlert,
+  type OutbreakInstantAlert,
 } from "./lib/email";
-import { renderPushPayload } from "./lib/push";
+import { renderPushPayload, renderOutbreakPushPayload } from "./lib/push";
 import { computeHealthState, type HealthState } from "./sourceHealth";
 
 // Notification dispatch (SPEC.md §9). The §7 matcher and the §9 decision matrix
@@ -54,6 +59,10 @@ function appBase(): string {
 
 function recallUrl(recallId: string): string {
   return `${appBase()}/recalls/${recallId}`;
+}
+
+function outbreakUrl(outbreakId: string): string {
+  return `${appBase()}/outbreaks/${outbreakId}`;
 }
 
 /** One-click email unsubscribe link for a member (§2). Undefined pre-migration. */
@@ -147,6 +156,62 @@ async function enqueueClosure(
     matchedOn: [] as string[],
     confidence: "high" as const,
     severity,
+    queuedAt: now,
+  };
+  if (existingClosure) await ctx.db.patch(existingClosure._id, row);
+  else await ctx.db.insert("digestQueue", row);
+}
+
+async function enqueueOutbreakMatch(
+  ctx: MutationCtx,
+  params: {
+    memberId: Id<"members">;
+    outbreak: Doc<"outbreaks">;
+    match: MatchResult;
+    now: number;
+  },
+): Promise<void> {
+  const { memberId, outbreak, match, now } = params;
+  if (await hasSentRevision(ctx, memberId, outbreak._id, outbreak.contentHash, "email")) {
+    return;
+  }
+  const rows = await queueRowsFor(ctx, memberId, outbreak._id);
+  const existingMatch = rows.find((r) => r.kind === "match");
+  const row = {
+    memberId,
+    alertId: outbreak._id as string,
+    alertType: "outbreak" as const,
+    contentHash: outbreak.contentHash,
+    kind: "match" as const,
+    matchedOn: match.matchedOn as string[],
+    confidence: match.overallConfidence,
+    severity: OUTBREAK_ALERT_SEVERITY,
+    queuedAt: now,
+  };
+  if (existingMatch) await ctx.db.patch(existingMatch._id, row);
+  else await ctx.db.insert("digestQueue", row);
+}
+
+async function enqueueOutbreakClosure(
+  ctx: MutationCtx,
+  params: {
+    memberId: Id<"members">;
+    outbreak: Doc<"outbreaks">;
+    now: number;
+  },
+): Promise<void> {
+  const { memberId, outbreak, now } = params;
+  const rows = await queueRowsFor(ctx, memberId, outbreak._id);
+  const existingClosure = rows.find((r) => r.kind === "closure");
+  const row = {
+    memberId,
+    alertId: outbreak._id as string,
+    alertType: "outbreak" as const,
+    contentHash: outbreak.contentHash,
+    kind: "closure" as const,
+    matchedOn: [] as string[],
+    confidence: "high" as const,
+    severity: OUTBREAK_ALERT_SEVERITY,
     queuedAt: now,
   };
   if (existingClosure) await ctx.db.patch(existingClosure._id, row);
@@ -335,6 +400,182 @@ export const dispatchForRecall = internalMutation({
   },
 });
 
+/**
+ * Match one outbreak revision against every household and route notifications
+ * (§4 Phase 4/§9). The outbreak analog of dispatchForRecall: an active outbreak
+ * is Class I-equivalent for alerting (§4), gated by the household's `outbreaks`
+ * category toggle (checked upstream — the matcher itself only knows audience,
+ * and outbreaks present as human-audience). Scheduled by `outbreaks.upsertBatch`
+ * on insert ('new'), material revision ('material'), and an active→resolved
+ * transition ('resolution', the outbreak analog of a recall closure).
+ */
+export const dispatchForOutbreak = internalMutation({
+  args: {
+    outbreakId: v.id("outbreaks"),
+    event: v.union(
+      v.literal("new"),
+      v.literal("material"),
+      v.literal("resolution"),
+    ),
+  },
+  handler: async (ctx, { outbreakId, event }) => {
+    const outbreak = await ctx.db.get(outbreakId);
+    if (!outbreak) return { dispatched: 0 };
+    const now = Date.now();
+    const severity = OUTBREAK_ALERT_SEVERITY;
+
+    // Backfill guard: a NEW outbreak only notifies if recently published.
+    if (event === "new" && !isFreshForNotification(outbreak.publishedAt, now)) {
+      return { dispatched: 0, reason: "stale-new" as const };
+    }
+    // A material edit to an already-resolved outbreak is timeline-only —
+    // resolved investigations never notify (mirrors the closed-recall guard).
+    if (event === "material" && outbreak.status !== "active") {
+      return { dispatched: 0, reason: "resolved-material" as const };
+    }
+
+    const households = await ctx.db.query("households").collect();
+    let dispatched = 0;
+
+    for (const household of households) {
+      const prefs = await ctx.db
+        .query("householdPreferences")
+        .withIndex("by_household", (q) => q.eq("householdId", household._id))
+        .unique();
+      if (!prefs) continue;
+      // §7 outbreaks category toggle — the upstream gate the matcher can't see.
+      if (!prefs.categories.outbreaks) continue;
+
+      const match = matchRecall(outbreakToMatchable(outbreak), prefs);
+      const members = await ctx.db
+        .query("members")
+        .withIndex("by_household", (q) => q.eq("householdId", household._id))
+        .collect();
+
+      for (const member of members) {
+        const settings = await ctx.db
+          .query("notificationSettings")
+          .withIndex("by_member", (q) => q.eq("memberId", member._id))
+          .unique();
+        if (!settings || (!settings.emailOptIn && !settings.pushOptIn)) continue;
+
+        if (event === "resolution") {
+          // A now-resolved outbreak must never re-announce as new: drop any
+          // still-pending match line first.
+          const rows = await queueRowsFor(ctx, member._id, outbreakId);
+          for (const r of rows.filter((r) => r.kind === "match")) {
+            await ctx.db.delete(r._id);
+          }
+          // Resolution lines are email-digest-only, for previously-emailed
+          // members, while the category stays enabled.
+          if (!settings.emailOptIn || !match.categoryEnabled) continue;
+          const priorSends = await ctx.db
+            .query("notificationsSent")
+            .withIndex("by_member_alert", (q) =>
+              q
+                .eq("memberId", member._id)
+                .eq("alertId", outbreakId)
+                .eq("channel", "email"),
+            )
+            .collect();
+          if (priorSends.length === 0) continue; // never notified → timeline only
+          await enqueueOutbreakClosure(ctx, { memberId: member._id, outbreak, now });
+          dispatched++;
+          continue;
+        }
+
+        if (!match.matched) continue;
+
+        const decision = decideRoute({
+          match,
+          severity,
+          threshold: settings.urgencyThreshold,
+        });
+
+        if (decision.route === "instant") {
+          if (
+            settings.emailOptIn &&
+            !(await hasSentRevision(ctx, member._id, outbreakId, outbreak.contentHash, "email"))
+          ) {
+            await ctx.db.insert("notificationsSent", {
+              memberId: member._id,
+              alertId: outbreakId,
+              alertType: "outbreak",
+              contentHash: outbreak.contentHash,
+              channel: "email",
+              mode: "instant",
+              sentAt: now,
+            });
+            const alert: OutbreakInstantAlert = {
+              title: outbreak.title,
+              pathogen: outbreak.pathogen,
+              matchedOn: match.matchedOn,
+              url: outbreakUrl(outbreakId),
+            };
+            const message: EmailMessage = {
+              to: member.email,
+              subject: outbreakInstantSubject(alert),
+              text: renderOutbreakInstantText(
+                alert,
+                household.name,
+                unsubscribeUrl(settings.unsubscribeToken),
+              ),
+            };
+            await ctx.scheduler.runAfter(
+              0,
+              internal.notifications.sendInstantEmail,
+              { message },
+            );
+            dispatched++;
+          }
+
+          if (
+            settings.pushOptIn &&
+            settings.pushSubscription &&
+            !(await hasSentRevision(ctx, member._id, outbreakId, outbreak.contentHash, "push"))
+          ) {
+            await ctx.db.insert("notificationsSent", {
+              memberId: member._id,
+              alertId: outbreakId,
+              alertType: "outbreak",
+              contentHash: outbreak.contentHash,
+              channel: "push",
+              mode: "instant",
+              sentAt: now,
+            });
+            const payload = renderOutbreakPushPayload({
+              title: outbreak.title,
+              url: outbreakUrl(outbreakId),
+              tag: outbreakId,
+            });
+            await ctx.scheduler.runAfter(0, internal.push.sendPushNotification, {
+              memberId: member._id,
+              subscription: settings.pushSubscription,
+              payload,
+            });
+            dispatched++;
+          }
+        } else if (decision.route === "digest" && settings.emailOptIn) {
+          // In practice unreached today: an active outbreak is Class I (§4), so
+          // decideRoute always returns "instant" for a match. Kept as the
+          // faithful mirror of the recall path — routing stays owned by
+          // decideRoute, not duplicated here — so a future severity change
+          // Just Works instead of silently dropping the alert.
+          await enqueueOutbreakMatch(ctx, {
+            memberId: member._id,
+            outbreak,
+            match,
+            now,
+          });
+          dispatched++;
+        }
+      }
+    }
+
+    return { dispatched };
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Source status for the digest footer / reassurance gate (§10). Mirrors
 // sourceHealth.getPublicStatus: read-time staleness recompute, worst-of stored
@@ -408,6 +649,27 @@ export const drainDueDigests = internalMutation({
 
       const items: DigestItem[] = [];
       for (const row of queueRows) {
+        if (row.alertType === "outbreak") {
+          const outbreak = await ctx.db.get(row.alertId as Id<"outbreaks">);
+          if (!outbreak) continue; // outbreak vanished → drop the line
+          if (row.kind === "closure") {
+            if (outbreak.status === "active") continue; // reopened → stale closure
+            items.push({
+              kind: "outbreak_closure",
+              title: outbreak.title,
+              url: outbreakUrl(row.alertId),
+            });
+          } else {
+            items.push({
+              kind: "outbreak",
+              title: outbreak.title,
+              pathogen: outbreak.pathogen,
+              matchedOn: row.matchedOn as MatchDimension[],
+              url: outbreakUrl(row.alertId),
+            });
+          }
+          continue;
+        }
         const recall = await ctx.db.get(row.alertId as Id<"recalls">);
         if (!recall) continue; // recall vanished → drop the line
         if (row.kind === "closure") {

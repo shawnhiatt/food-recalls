@@ -45,13 +45,15 @@ urgency, not spec order.
 
 - [ ] **Formal WCAG 2.2 AA audit** of onboarding, feed, and detail screens (§14
       Phase 5 exit criterion — shipped without a dedicated pass).
-- [ ] **Outbreak notification dispatch.** `notificationsSent`/`digestQueue` already
-      model an `outbreak` alertType and §4 says active outbreaks are "Class I
-      equivalent for alerting," but instant/digest delivery was never wired
-      through `convex/notifications.ts` for outbreaks — recalls only.
-      Concrete implementation plan (scoped 2026-07-14, larger than it looks —
-      ripples through the §9 digest/email trust core): see
-      [docs/outbreak-notification-dispatch.md](docs/outbreak-notification-dispatch.md).
+- [x] **Outbreak notification dispatch.** Shipped 2026-07-18. `dispatchForOutbreak`
+      (`convex/notifications.ts`) mirrors `dispatchForRecall`: active outbreaks are
+      Class I-equivalent (§4), gated upstream by the household `outbreaks` toggle,
+      delivered instant (email + push) with an active→resolved transition producing
+      a digest closure line. Additive render paths keep the §11 "be aware" voice
+      (`lib/digest.ts`, `lib/email.ts`, `lib/push.ts`) without touching recall copy;
+      `outbreaks.upsertBatch` schedules new/material/resolution. +11 tests
+      (`outbreak-notifications.test.ts`, digest/matching additions), 274 green.
+      Plan doc: [docs/outbreak-notification-dispatch.md](docs/outbreak-notification-dispatch.md).
 - [ ] **Real-device push verification** (iOS-installed PWA + Android) and a fresh
       Lighthouse ≥90 pass across all categories (§14 Phase 3 exit criteria,
       never actually run on physical hardware).
@@ -81,8 +83,8 @@ three requirements were never built:
       - Search (commit 420a6b7): `/search` route + `recalls.search`/
         `outbreaks.search`, spanning archived alerts the feed hides. Verified
         live on dev.
-      Dev backfilled + verified; **prod backfill still pending a prod deploy of
-      this code** (see note below).
+      Fully live on **prod** as of 2026-07-18: Convex deployed, backfill run,
+      UPC + word search both verified against `good-lynx-479`.
 - [ ] **`linkPending` is a dead schema field.** §4 says a press record with no
       matching API record creates a provisional recall flagged `linkPending`;
       the implementation deliberately never creates provisional records — press

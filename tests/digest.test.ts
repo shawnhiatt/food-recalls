@@ -106,6 +106,48 @@ describe("non-empty digest", () => {
   });
 });
 
+describe("outbreak digest lines (§4 Phase 4/§11)", () => {
+  const outbreak: DigestItem = {
+    kind: "outbreak",
+    title: "E. coli in romaine",
+    pathogen: "E. coli",
+    matchedOn: ["state"],
+    url: "https://x/outbreaks/1",
+  };
+  const outbreakClosure: DigestItem = {
+    kind: "outbreak_closure",
+    title: "Old salmonella investigation",
+    url: "https://x/outbreaks/2",
+  };
+
+  test("outbreak matches render in a distinct 'be aware' section, no risk-class label", () => {
+    const body = renderDigestText(input({ items: [outbreak] }));
+    expect(body).toMatch(/Active outbreaks to be aware of:/);
+    expect(body).toMatch(/E\. coli in romaine — E\. coli/);
+    expect(body).toMatch(/Your state/);
+    // Never framed with a recall severity label.
+    expect(body).not.toMatch(/High risk/);
+  });
+
+  test("outbreak matches suppress the all-clear reassurance line", () => {
+    const body = renderDigestText(input({ items: [outbreak] }));
+    expect(body).not.toMatch(/no new recalls affect your household/i);
+  });
+
+  test("subject counts outbreaks — alone and mixed with recalls", () => {
+    expect(digestSubject(input({ items: [outbreak] }))).toMatch(/1 active outbreak may affect/i);
+    expect(digestSubject(input({ items: [match, outbreak] }))).toMatch(/1 recall and 1 outbreak affect/i);
+    // Recall-only subject is unchanged (regression guard).
+    expect(digestSubject(input({ items: [match] }))).toMatch(/1 new recall affects/i);
+  });
+
+  test("outbreak resolution renders under the resolved/updated heading", () => {
+    const body = renderDigestText(input({ items: [outbreakClosure] }));
+    expect(body).toMatch(/Resolved \/ updated/i);
+    expect(body).toMatch(/Old salmonella investigation — investigation closed/);
+  });
+});
+
 describe("sortDigestItems", () => {
   test("matches sort by severity, closures last", () => {
     const c2: DigestItem = { ...match, severity: "class2", title: "C2" };
