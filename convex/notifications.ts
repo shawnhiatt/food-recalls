@@ -381,7 +381,11 @@ export const dispatchForRecall = internalMutation({
             });
             dispatched++;
           }
-        } else if (decision.route === "digest" && settings.emailOptIn) {
+        } else if (
+          decision.route === "digest" &&
+          settings.emailOptIn &&
+          settings.digestEnabled
+        ) {
           // The email digest is the sole "quiet" channel — push is
           // instant-only and simply doesn't fire below its threshold.
           await enqueueMatch(ctx, {
@@ -555,7 +559,11 @@ export const dispatchForOutbreak = internalMutation({
             });
             dispatched++;
           }
-        } else if (decision.route === "digest" && settings.emailOptIn) {
+        } else if (
+          decision.route === "digest" &&
+          settings.emailOptIn &&
+          settings.digestEnabled
+        ) {
           // In practice unreached today: an active outbreak is Class I (§4), so
           // decideRoute always returns "instant" for a match. Kept as the
           // faithful mirror of the recall path — routing stays owned by

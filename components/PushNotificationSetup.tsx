@@ -214,7 +214,7 @@ function EmailPreview() {
       style={{ borderColor: "var(--color-border)", background: "var(--color-background)" }}
     >
       <p className="text-xs font-semibold" style={{ color: "var(--color-foreground)" }}>
-        Subject: 1 new recall matches your household
+        Subject: 1 new recall affects your household
       </p>
       <p className="mt-1 text-xs" style={{ color: "var(--color-muted-foreground)" }}>
         High risk: Example Snack Co. bars — View the recall →

@@ -190,6 +190,20 @@ describe("instant routing + dedupe (§9)", () => {
     expect(q[0]!.matchedOn).toContain("state");
   });
 
+  test("digest disabled → a below-threshold match enqueues nothing (no wasted writes)", async () => {
+    const t = setupConvex();
+    await seedHousehold(
+      t,
+      { states: ["NC"] },
+      { urgencyThreshold: "class1_plus_allergen", digestEnabled: false },
+    );
+    const recallId = await insertRecall(t, { classification: "Class II", states: ["NC"] });
+
+    await dispatch(t, { recallId, event: "new" });
+    expect(await sentRows(t)).toHaveLength(0);
+    expect(await queueRows(t)).toHaveLength(0); // digest off → never queued
+  });
+
   test("hard floor overrides digest-only preset (class1_only): Class I + allergen → instant", async () => {
     const t = setupConvex();
     await seedHousehold(

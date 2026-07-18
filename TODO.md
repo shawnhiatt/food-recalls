@@ -99,10 +99,12 @@ three requirements were never built:
 - [ ] Digest crash between queue-drain and delivery loses that day's digest for
       affected members (documented at-most-once bias — correct tradeoff, but a
       retry/backfill path would close the gap).
-- [ ] `digestQueue` enqueues rows even when a member's `digestEnabled` is false
+- [x] `digestQueue` enqueues rows even when a member's `digestEnabled` is false
       (wasted writes, not a correctness bug — they're just never read).
-- [ ] `PushNotificationSetup`'s email-preview subject line says "matches" where
-      the real digest subject says "affects" — cosmetic mismatch.
+      Fixed 2026-07-18: the digest route now guards on `settings.digestEnabled`
+      in `convex/notifications.ts` (both recall + outbreak paths).
+- [x] `PushNotificationSetup`'s email-preview subject line says "matches" where
+      the real digest subject says "affects" — cosmetic mismatch. Fixed 2026-07-18.
 - [ ] Detail pages' per-recall SEO metadata doesn't reach `<head>` at parse time
       (Next.js 15 streaming-metadata quirk on client-rendered dynamic routes) —
       low-stakes for an unlisted personal tool, matters more if this goes public.
