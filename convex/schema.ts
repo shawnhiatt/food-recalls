@@ -63,7 +63,11 @@ export const normalizedRecallFields = {
   sourceUrl: v.string(),
   raw: v.any(),
   contentHash: v.string(),
-  linkPending: v.optional(v.boolean()),
+  // NOTE: no `linkPending` field. SPEC.md §4 originally specified provisional
+  // recalls from unmatched press releases; the implementation deliberately
+  // never creates them (press items only enrich existing enforcement records —
+  // see convex/press.ts). The field was removed 2026-07-18 as dead; the
+  // deviation is documented in SPEC.md §4.
 };
 
 // Fields shared by the adapter output (NormalizedOutbreak) and the outbreaks

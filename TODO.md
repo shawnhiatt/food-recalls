@@ -85,14 +85,12 @@ three requirements were never built:
         live on dev.
       Fully live on **prod** as of 2026-07-18: Convex deployed, backfill run,
       UPC + word search both verified against `good-lynx-479`.
-- [ ] **`linkPending` is a dead schema field.** §4 says a press record with no
-      matching API record creates a provisional recall flagged `linkPending`;
-      the implementation deliberately never creates provisional records — press
-      items only enrich existing enforcement records, retrying unmatched items
-      for 180 days before lapsing (`convex/press.ts`). That means a recall
-      announced by press release surfaces only weeks later when the enforcement
-      record lands. Either implement provisional records (spec behavior — better
-      timeliness) or remove the field and record the deviation in SPEC.md.
+- [x] **`linkPending` is a dead schema field.** Resolved 2026-07-18: removed the
+      field from `convex/schema.ts` and documented the deliberate deviation in
+      SPEC.md §4 (press items enrich existing enforcement records with a 180-day
+      retry; no provisional records). Chose remove-and-document over implementing
+      provisional records — the timeliness win wasn't worth the provisional/real
+      dedup complexity for an unlisted personal tool.
 
 ## Minor polish (low priority)
 

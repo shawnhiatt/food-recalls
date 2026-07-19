@@ -123,8 +123,17 @@ Each source (openFDA, FSIS, FDA RSS, CDC) is a self-contained adapter with the s
 contract:
 
 - **Identity:** emits `(source, sourceId)`; press-release records link to their API record
-  by recall/event number when present, else create a provisional record flagged
-  `linkPending`.
+  by recall/event number when present.
+  - **Deviation (2026-07-18):** the original design also created a provisional
+    recall flagged `linkPending` for a press release with no matching API
+    record. This was never implemented, and the `linkPending` field has been
+    removed. Instead, press items only ever *enrich* an existing enforcement
+    record (photo, risk-group text, notice URL); an unmatched relevant item is
+    retried for 180 days before lapsing (`convex/press.ts`). The tradeoff: a
+    recall announced only by press release surfaces when its enforcement record
+    lands (days–weeks later) rather than immediately. Accepted to avoid
+    provisional/real-record dedup complexity and provisional records that might
+    never reconcile.
 - **Revisioning:** computes a `contentHash` over the material fields (classification,
   states, allergens, status, productDesc, productCodes). Hash unchanged → touch
   `updatedAt` only. Hash changed → append an `updateHistory` entry and re-run matching.
@@ -201,7 +210,7 @@ recalls: {
   sourceUrl: string,
   raw: any,                        // full original record
   contentHash: string,             // hash of material fields; revision identity
-  linkPending?: boolean,           // press record awaiting API-record link
+  // NOTE: no `linkPending` — see the §4 "Source adapters" deviation note.
   updateHistory: Array<{           // powers the Timeline view
     date: string,
     label: string,                 // "Recall", "Update 1", ...
