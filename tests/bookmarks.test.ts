@@ -1,10 +1,18 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import { setupConvex, createUser, asUser, linkMemberToUser } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
 
 // Bookmarks (SPEC.md §12 Saved tab) are scoped to the caller's own member row
 // (Phase 5 auth). Signed-out reads are empty; toggling requires sign-in.
+//
+// toggle now schedules a §15 image-mirror action on add; pin the clock and
+// drain it so the (no-op, image-less) action can't leak past teardown.
+beforeEach(() => vi.useFakeTimers({ now: new Date("2026-07-11T12:00:00Z") }));
+afterEach(() => vi.useRealTimers());
+
+const drain = (t: ReturnType<typeof setupConvex>) =>
+  t.finishAllScheduledFunctions(vi.runAllTimers);
 
 // Seed the pilot household, then sign in as its owner (claim-by-email links the
 // seeded member to a new auth user).
@@ -67,6 +75,7 @@ describe("bookmarks.toggle / list", () => {
     });
     expect(removed).toEqual({ bookmarked: false });
     expect(await as.query(api.bookmarks.list, {})).toHaveLength(0);
+    await drain(t);
   });
 
   test("list is empty for a signed-out visitor", async () => {
@@ -116,5 +125,6 @@ describe("bookmarks.toggle / list", () => {
     expect(entry.alertType).toBe("outbreak");
     if (entry.alertType !== "outbreak") throw new Error("expected an outbreak entry");
     expect(entry.pathogen).toBe("E. coli");
+    await drain(t);
   });
 });

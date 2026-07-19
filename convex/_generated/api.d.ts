@@ -21,6 +21,7 @@ import type * as crons from "../crons.js";
 import type * as feed from "../feed.js";
 import type * as household from "../household.js";
 import type * as http from "../http.js";
+import type * as images from "../images.js";
 import type * as ingest_cdc from "../ingest/cdc.js";
 import type * as ingest_fdaRss from "../ingest/fdaRss.js";
 import type * as ingest_fsis from "../ingest/fsis.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   feed: typeof feed;
   household: typeof household;
   http: typeof http;
+  images: typeof images;
   "ingest/cdc": typeof ingest_cdc;
   "ingest/fdaRss": typeof ingest_fdaRss;
   "ingest/fsis": typeof ingest_fsis;

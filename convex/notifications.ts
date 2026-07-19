@@ -258,6 +258,7 @@ export const dispatchForRecall = internalMutation({
 
     const households = await ctx.db.query("households").collect();
     let dispatched = 0;
+    let anyMatch = false; // §15: mirror this recall's image if it matched anyone
 
     for (const household of households) {
       const prefs = await ctx.db
@@ -267,6 +268,7 @@ export const dispatchForRecall = internalMutation({
       if (!prefs) continue;
 
       const match = matchRecall(recall, prefs);
+      if (match.matched) anyMatch = true;
       const members = await ctx.db
         .query("members")
         .withIndex("by_household", (q) => q.eq("householdId", household._id))
@@ -400,6 +402,12 @@ export const dispatchForRecall = internalMutation({
       }
     }
 
+    // §15: a matched recall is one a household cares about — mirror its image so
+    // the card keeps its photo after the press-release URL rots. Idempotent.
+    if (anyMatch && recall.imageUrl && !recall.imageStorageId) {
+      await ctx.scheduler.runAfter(0, internal.images.mirrorRecallImage, { recallId });
+    }
+
     return { dispatched };
   },
 });
@@ -440,6 +448,7 @@ export const dispatchForOutbreak = internalMutation({
 
     const households = await ctx.db.query("households").collect();
     let dispatched = 0;
+    let anyMatch = false; // §15: mirror this outbreak's image if it matched anyone
 
     for (const household of households) {
       const prefs = await ctx.db
@@ -451,6 +460,7 @@ export const dispatchForOutbreak = internalMutation({
       if (!prefs.categories.outbreaks) continue;
 
       const match = matchRecall(outbreakToMatchable(outbreak), prefs);
+      if (match.matched) anyMatch = true;
       const members = await ctx.db
         .query("members")
         .withIndex("by_household", (q) => q.eq("householdId", household._id))
@@ -578,6 +588,14 @@ export const dispatchForOutbreak = internalMutation({
           dispatched++;
         }
       }
+    }
+
+    // §15: mirror a matched outbreak's image (rare — CDC pages seldom carry one,
+    // but the path mirrors recalls). Idempotent.
+    if (anyMatch && outbreak.imageUrl && !outbreak.imageStorageId) {
+      await ctx.scheduler.runAfter(0, internal.images.mirrorOutbreakImage, {
+        outbreakId,
+      });
     }
 
     return { dispatched };

@@ -107,6 +107,11 @@ export default defineSchema({
     // productDesc/productCodes; optional because pre-existing rows are filled
     // by a one-off backfill (convex/migrations.ts), not synchronously on deploy.
     searchText: v.optional(v.string()),
+    // §15: press-release image URLs rot, so bookmarked/matched alerts get their
+    // image mirrored into Convex file storage (convex/images.ts). When set,
+    // `imageUrl` has been rewritten to the durable storage URL; `imageSource`
+    // keeps the original provenance. Unset = never mirrored (still hotlinking).
+    imageStorageId: v.optional(v.id("_storage")),
   })
     .index("by_source_id", ["source", "sourceId"])
     .index("by_recall_date", ["recallDate"])
@@ -122,6 +127,7 @@ export default defineSchema({
     firstSeenAt: v.number(),
     updatedAt: v.number(),
     searchText: v.optional(v.string()), // see recalls.searchText
+    imageStorageId: v.optional(v.id("_storage")), // §15 mirror, see recalls.imageStorageId
   })
     .index("by_source_id", ["source", "sourceId"])
     .index("by_published_at", ["publishedAt"])

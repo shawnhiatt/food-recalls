@@ -66,12 +66,15 @@ clean, §10 archive rule, per-member digest timezones, §3 cron cadences, feed n
 badge semantics, §11 label derive-then-pin, no unbranded dark-mode block). These
 three requirements were never built:
 
-- [ ] **Press-image mirroring to Convex file storage** (§15). Press-release image
-      URLs rot; the spec says to mirror images for matched/bookmarked alerts at
-      minimum. `ctx.storage` is unused anywhere in the codebase — cards and
-      detail views hotlink `imageUrl` directly. Sketch: an action that fetches
-      the image on first bookmark/match, stores it, and swaps `imageUrl` for the
-      storage URL (keep `imageSource` provenance).
+- [x] **Press-image mirroring to Convex file storage** (§15). Shipped 2026-07-18
+      (`convex/images.ts`): a `mirrorRecallImage`/`mirrorOutbreakImage` action
+      fetches the image and stores it in Convex file storage, rewriting `imageUrl`
+      to the durable storage URL and setting `imageStorageId` (the mirrored marker)
+      while keeping `imageSource` provenance. Triggered on first bookmark
+      (`bookmarks.toggle`) and on notification match (`dispatchFor*`), both
+      idempotent + race-safe. `backfillBookmarkedImages` covers already-bookmarked
+      alerts. Verified live on dev: a real fda.gov press image now serves from
+      `…/api/storage/…`. +4 tests.
 - [x] **Archived alerts are unreachable** (§10). Fixed 2026-07-14 in two parts
       on a shared full-text search index (`searchText` + Convex `searchIndex` on
       recalls/outbreaks, `convex/lib/search.ts`, backfilled over ~29k rows via

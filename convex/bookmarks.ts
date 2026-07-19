@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { getCurrentMember, requireMember } from "./lib/auth";
 
 // Bookmarks (SPEC.md §12 "Saved" tab, detail-view bookmark action). Scoped to
@@ -81,6 +82,18 @@ export const toggle = mutation({
       alertType: args.alertType,
       createdAt: Date.now(),
     });
+    // §15: mirror the alert's image into Convex storage on first interest, so a
+    // bookmarked card keeps its photo even after the press-release URL rots.
+    // Idempotent — the action no-ops if there's no image or it's already mirrored.
+    if (args.alertType === "recall") {
+      await ctx.scheduler.runAfter(0, internal.images.mirrorRecallImage, {
+        recallId: args.alertId as Id<"recalls">,
+      });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.images.mirrorOutbreakImage, {
+        outbreakId: args.alertId as Id<"outbreaks">,
+      });
+    }
     return { bookmarked: true };
   },
 });
