@@ -43,8 +43,13 @@ urgency, not spec order.
 
 ## Carried-forward from the spec audits (never closed)
 
-- [ ] **Formal WCAG 2.2 AA audit** of onboarding, feed, and detail screens (§14
-      Phase 5 exit criterion — shipped without a dedicated pass).
+- [x] **Formal WCAG 2.2 AA audit** of onboarding, feed, and detail screens (§14
+      Phase 5 exit criterion). Structural/automated pass done 2026-07-18 — see
+      [docs/wcag-audit.md](docs/wcag-audit.md). Fixed: feed heading hierarchy
+      (missing `h1`, `h1→h2→h3` outline) and invisible keyboard focus on filter
+      selects + the onboarding member input (2.4.7). Verified alt text, form
+      labels, contrast (muted 4.6:1), landmarks, target sizes. Residual (needs
+      physical assistive-tech): real NVDA/VoiceOver pass + dark-mode contrast.
 - [x] **Outbreak notification dispatch.** Shipped 2026-07-18. `dispatchForOutbreak`
       (`convex/notifications.ts`) mirrors `dispatchForRecall`: active outbreaks are
       Class I-equivalent (§4), gated upstream by the household `outbreaks` toggle,

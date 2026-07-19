@@ -318,7 +318,7 @@ function StepWho({ answers, patch }: StepProps) {
                   value={m.customLabel ?? displayLabel(members, i)}
                   onChange={(e) => setMember(i, { ...m, customLabel: e.target.value })}
                   aria-label={`Member ${i + 1} label`}
-                  className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none"
+                  className="min-w-0 flex-1 rounded bg-transparent text-sm font-bold outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary)"
                   style={{ color: "var(--color-foreground)" }}
                 />
                 {members.length > 1 && (

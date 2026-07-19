@@ -110,7 +110,7 @@ function Chip({
   const active = value !== "";
   return (
     <label
-      className="inline-flex min-h-11 shrink-0 items-center rounded-full px-3 text-xs font-medium"
+      className="inline-flex min-h-11 shrink-0 items-center rounded-full px-3 text-xs font-medium focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--color-primary)"
       style={{
         background: active ? "var(--color-secondary)" : "var(--color-card)",
         color: active ? "var(--color-primary-text)" : "var(--color-foreground)",

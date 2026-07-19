@@ -75,6 +75,11 @@ export default function FeedPage() {
 
   return (
     <main>
+      {/* WCAG 2.4.6/1.3.1: the feed is the app's home page but has no visible
+          title (the header brand isn't a heading), so give assistive tech a
+          top-level h1. The matched section and the list below sit under it as
+          h2s, with cards as h3 — a clean h1 → h2 → h3 outline. */}
+      <h1 className="sr-only">Food recalls and outbreaks</h1>
       <FirstRunNotice />
       <SourceHealthBanner />
       {!filters.matchedOnly && (
@@ -89,6 +94,10 @@ export default function FeedPage() {
           variant={filters.matchedOnly ? "no-household-matches" : hasActiveFilters ? "no-results" : "no-data"}
         />
       ) : (
+        <>
+        <h2 className="sr-only">
+          {filters.matchedOnly ? "Recalls and outbreaks matching your household" : "All recalls and outbreaks"}
+        </h2>
         <ul className="flex flex-col gap-3 px-4 pb-4">
           {merged.map((entry) =>
             entry.kind === "outbreak" ? (
@@ -102,6 +111,7 @@ export default function FeedPage() {
             ),
           )}
         </ul>
+        </>
       )}
 
       {status === "CanLoadMore" && (
