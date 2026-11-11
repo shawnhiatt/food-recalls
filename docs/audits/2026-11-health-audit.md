@@ -27,7 +27,7 @@ Method and limits:
 | 4 | Medium | Next 15.5.20 has 14 advisories (4 critical). Real exposure on Vercel is low (no Server Actions, `next/image`, rewrites or custom server). Patched to 15.5.29 on this branch. |
 | 5 | Medium | Press↔recall matching truncates its candidate window (`take(600)` / `take(500)`, ascending). Newer recalls fall outside it, which helps explain 1–6% photo coverage Jul–Sep. |
 | 6 | Medium | A malformed `/recalls/<id>` or `/outbreaks/<id>` crashes the whole app ("Application error"). There are no `error.tsx` boundaries anywhere. |
-| 7 | Medium | FSIS and CDC are still 403. FSIS and cdc.gov now 403 even plain curl from a residential IP. Options and a recommendation are below. |
+| 7 | Medium | 3 of 4 sources are blocked: FSIS 403 and CDC 403 (both fingerprint-based, failing even from a residential IP) and FDA press 401 (IP-based). The recommended single fix is to ingest the agencies' official email alerts; options and costs are below. |
 | 8 | Low | `@auth/core` critical (email-normalizer homoglyph) **isn't reachable** through Convex Auth's email OTP. Patched anyway. |
 | 9 | Low | vitest/tinypool criticals are dev-only (the test runner isn't shipped and no UI server is used). A major-version bump is needed. |
 | 10 | Low | The ~8.6s cold first load isn't bundle weight (141 kB first-load JS). The Vercel cold start measures ~1.9s TTFB. I couldn't reproduce 8.6s. |
@@ -55,6 +55,22 @@ upgrade.
   20 items, newest 2026-11-10. The response sets **Akamai Bot Manager cookies**
   (`_abck`, `bm_sz`). That's new protection on www.fda.gov: a 401 that only cloud IPs get
   means IP-reputation or bot scoring, not anything in our request.
+- **It isn't a missing header.** From the same residential IP, a bare `curl` with no
+  headers beyond curl's default UA gets 200. So does Node's own `fetch` (undici) sending
+  only the app UA: 18 KB, 20 items. So no header the edge "now requires" is in play. The
+  remaining differences between the Mac and Convex are the source IP and the client's TLS
+  stack.
+- **Confirmed from Convex's own egress (2026-11-11, throwaway probe on dev
+  `intent-donkey-676`, since removed).** Each URL got one request with the app UA:
+  - Every fda.gov URL tried, **including the homepage**, returns `401`,
+    `server: AkamaiGHost`: a 5.3 KB fda.gov-branded page reading *"Sorry! This
+    resembles an automated request."* That's a deliberate site-wide bot-deny page, not
+    auth and not a header problem.
+  - FSIS API and cdc.gov return `403` with Akamai's stock "Access Denied … Reference
+    #18.…" page.
+  - `api.fda.gov` returns 200 (openFDA isn't behind this edge).
+
+  So all three blocked hosts sit on Akamai and deny Convex's egress by bot scoring.
 - **The feed format hasn't changed.** `parseRssItems` (unchanged code, run under Node 26)
   parses all 20 live items, with correct `publishedAt`, `guid === url` and titles. Links
   are still `http://` and redirect to https, which `fetch` follows. So this isn't a parse
@@ -227,20 +243,35 @@ TLS or bot fingerprinting, not IP reputation, so a residential relay without a r
 browser won't help them. fda.gov is the other way round: it serves residential IPs fine
 and blocks cloud ones.
 
-**Upstream access options (FSIS, CDC, and now FDA press)**
+**One fix for all three blocked sources: the options**
 
-| Option | Cost | Effort | Reliability | Notes |
-|---|---|---|---|---|
-| **A. Ask agencies to allowlist or fix** | $0 | ~1h (emails) | Low odds, slow | Still worth doing. FSIS's *documented* recall API returning 403 to every non-browser client is arguably a bug on their side. Allowlisting the Convex /24 means allowlisting every Convex app, so ask for an API key or token instead. |
-| **B. Email ingest (recommended for FSIS + CDC)** | $0 (Cloudflare Email Routing → Email Worker, or a Resend/Postmark inbound plan) | 2–3 days | High (push-based, official) | Subscribe a dedicated address to FSIS "Recalls & Public Health Alerts" and CDC food-safety outbreak updates (both via GovDelivery). The worker POSTs the parsed message to a Convex HTTP action. Adapters parse the email body, which has a title, establishment/firm, products, states and a link. It isn't IP- or fingerprint-dependent and isn't scraping. Downsides: email bodies are thinner than the API (no structured fields; the detail page fetch is still blocked), and parsers need fixtures. Add FDA's recall emails for redundancy. |
-| **C. Vercel Cron relay** | $0 (Hobby) / static IPs on paid plans | ~0.5 day | Unknown until probed (T2) | Only plausible for fda.gov, which blocks by IP. FSIS/CDC fingerprint-block, so this won't help them. |
-| **D. Commercial unblocker API** (ScrapingBee, ZenRows, ScraperAPI, Bright Data) | ~$49–69/mo entry plans. Protected pages cost ~10–25 credits each; ~100 req/day ≈ 3k req/mo fits the entry tier | ~0.5 day | High | Works for all three hosts, but it deliberately bypasses the agencies' bot controls (ToS-grey), puts a third party in the data path, and is a recurring cost for a personal tool. Pricing varies by source; verify before buying. |
-| **E. Home relay with a real browser** (Playwright on a Mac or Pi) | $0 | 1–2 days | Medium (home uptime) | Same bypass concern as D. Fragile, because headless Chrome is also fingerprinted. |
+Three of four sources are now blocked: FSIS 403 (~973 consecutive failures), CDC 403
+(~965) and FDA press 401 (145). Only `api.fda.gov` works from Convex. The blocks differ,
+which matters for the choice:
+- **fda.gov blocks by IP reputation.** Plain clients from a residential IP pass.
+- **fsis.usda.gov and cdc.gov fingerprint the client.** Plain clients fail even from a
+  residential IP; only real browsers pass.
 
-**Recommendation:** do **A** now (it costs nothing). Build **B** for FSIS and CDC as the
-durable path. Use **C** for fda.gov if the T2 probe shows Vercel gets 200, otherwise fold
-FDA into B. Keep D in reserve if Shawn wants full structured FSIS data and accepts the
-cost and the ToS posture. For the iOS plan: source reliability is a server-side
+So a "move the fetch off datacenter IPs" fix covers FDA only. Covering all three needs
+either a real browser, an unblocker service, or a channel that isn't web fetching at all.
+
+| Option | Covers | Cost | Effort | ToS / posture | Reliability |
+|---|---|---|---|---|---|
+| **A. Ask agencies** for an API key, allowlist or fix | All 3, if they agree | $0 | ~1h of emails | Clean | Low odds, slow. Allowlisting Convex's shared /24 admits every Convex app, so ask for a key or token instead. FSIS's *documented* recall API rejecting every non-browser client is arguably their bug. |
+| **B. Email ingest** via the agencies' official GovDelivery alerts (FSIS Recalls & Public Health Alerts, CDC food-safety outbreak updates, FDA recalls) → Cloudflare Email Routing + Email Worker (or Resend/Postmark inbound) → Convex HTTP action | All 3 | $0 | 2–3 days (receiver plus 3 email parsers with fixtures) | Clean: it's the channel the agencies publish for exactly this | High. Push-based, and independent of IPs and fingerprints. The tradeoff is thinner data than the APIs (text, not structured fields; no page fetch for photos), and parsers break if email templates change. The §10 anomaly logic needs a "no email in N days" rule. |
+| **C. Off-datacenter relay with a plain fetch**: Vercel Cron, a GitHub Actions schedule, or a home Mac/Pi via launchd → POST to a Convex HTTP action | FDA only | $0 (Vercel Hobby, GH Actions); static IP is a paid Vercel add-on | ~0.5 day | Clean (honest UA, normal fetch, public feed) | Vercel and GH Actions are also cloud IPs, so unknown until probed (T2). Home relay: proven 200 today, but it depends on the Mac being awake. |
+| **D. Commercial unblocker API** (ScrapingBee, ZenRows, ScraperAPI, Bright Data Web Unlocker) | All 3 | ~$49–69/mo entry tiers. Protected pages cost ~10–25 credits; ~3k req/mo fits the entry tier | ~0.5 day (wrap `fetch`) | **Grey.** It exists to defeat the sites' bot controls. Public data, polite volume, but it deliberately overrides the agencies' stated access policy. A third party also sits in the data path. | High while the vendor keeps winning the arms race. It's a recurring cost and vendor lock-in for a personal tool. |
+| **E. Home relay driving a real browser** (Playwright/Chrome on a Mac or Pi) | All 3 | $0 | 1–2 days | Grey, like D | Medium. It depends on home uptime, and headless Chrome is itself fingerprinted, so expect breakage. |
+| **F. Alternative official feeds** | Partial | $0 | — | Clean | Checked and **not viable**. The FSIS RSS is on the same fingerprint-blocked host (403), as is the data.gov catalog's FSIS feed, which points back to fsis.usda.gov. FDA datatables live on www.fda.gov, behind the same Akamai, and `/files/api/datatables/static/recalls.json` is a 404. The CDC syndication API at tools.cdc.gov returns 200 but has no current investigations. |
+
+**Recommendation: B as the one durable fix for all three, plus A in parallel.** It's the
+only option that is clean on ToS, costs nothing, and doesn't depend on how a given edge
+treats a given IP or TLS stack this month. While B is built, run **C for FDA**: try
+Vercel Cron first (pending the T2 probe), with the home relay as the fallback. That
+recovers the press feed before the ~2026-11-24 roll-off. Keep the existing API/HTML
+adapters wired up so a source that unblocks is picked up automatically. Use **D** only if
+Shawn wants full structured FSIS/CDC data and explicitly accepts the cost and the ToS
+posture. For the iOS plan: source reliability is a server-side
 prerequisite. Don't count on on-device fetching, because matching and notifications run on
 the server.
 
@@ -336,23 +367,26 @@ Ordered by value ÷ effort. Each is one concern.
 - **T1 — Decouple press ingest steps** (fdaRss.ts). Run relink and the OFF fallback even
   when the feed fetch fails, with separate error logging. ~1–2h, with tests. Restores
   enrichment for already-fetched press items. *Do before 2026-11-24.*
-- **T2 — Egress probe** (dev only). A throwaway Convex internal action on **dev** plus a
-  Vercel preview route that fetch the FDA RSS URL, one press page, one fda.gov image,
-  FSIS API/RSS and CDC outbreaks, and report the status codes. It decides between C, B
-  and D. ~1h, but needs Shawn's OK to deploy to dev and a preview.
+- **T2 — Vercel egress probe.** The Convex half is done (see §1: all three hosts deny
+  Convex at Akamai). What's left: a Vercel preview route that fetches the FDA RSS URL and
+  one press page and reports status codes. It decides whether T5 runs on Vercel Cron or
+  on a home relay. ~1h, and needs Shawn's OK for a preview deploy.
 - **T3 — UPC extraction from product descriptions** (+ match-time normalization, fixtures,
   backfill and search-text re-migration). ~0.5–1 day. Biggest functional win for the
   scanner and iOS.
 - **T4 — Alerting that notices new failures**: alert on every worsening, a weekly
   still-degraded reminder, and per-source acknowledgement for FSIS/CDC. Also confirm
   whether the 2026-10-24 operator email arrived. ~0.5 day.
-- **T5 — Restore FDA press transport** per the T2 result: a Vercel Cron relay to a Convex
-  HTTP action, or fold into T7. ~0.5 day, plus a backfill of items missed since 10-24.
+- **T5 — Interim FDA press relay** per the T2 result: a Vercel Cron relay to a Convex
+  HTTP action, or a home launchd relay if Vercel is also blocked. ~0.5 day, plus a
+  backfill of items missed since 10-24. It stays useful after T7 lands, because it
+  brings back the photos and press pages that email doesn't carry.
 - **T6 — Press-match window fix** (bounded per-item range, pending-item aging, test).
   ~2–3h. Then re-measure photo coverage.
-- **T7 — Email ingest for FSIS + CDC** (GovDelivery subscriptions → inbound worker →
-  Convex HTTP action → adapters with fixtures). 2–3 days. Plus option A, the agency
-  emails, which Shawn sends.
+- **T7 — Email ingest for FSIS, CDC and FDA** (GovDelivery subscriptions → inbound
+  worker → Convex HTTP action → adapters with fixtures, plus a "no email in N days"
+  health rule). 2–3 days. This is the durable fix for all three blocked sources. Plus
+  option A, the agency emails, which Shawn sends.
 - **T8 — Error boundaries + safe `get` by ID** (recalls and outbreaks), with a friendly
   missing-alert state. ~1–2h.
 - **T9 — Ship the patch upgrade** (this branch's dependency commit): merge after review,
