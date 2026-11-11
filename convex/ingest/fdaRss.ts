@@ -13,7 +13,8 @@ import { extractRiskGroups } from "../lib/enrichment";
 // risk-group text, and enrich matching enforcement records via convex/press.ts.
 // Then retry unmatched items (enforcement records lag press releases), and
 // finish with the Open Food Facts image fallback for recent recalls that
-// still have no photo (§3 fallback chain, rung 2).
+// still have no photo (§3 fallback chain, rung 2). The three steps are
+// isolated: see the note above `ingest`.
 
 const RSS_URL =
   "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml";
@@ -53,84 +54,152 @@ export type PressIngestSummary = {
   recallsEnriched: number;
   relinked: number;
   offImages: number;
+  /** Steps that threw this run (feed, relink, off); empty on a clean run. */
+  failedSteps: PressIngestStep[];
 };
 
+export type PressIngestStep = "feed" | "relink" | "off";
+
+// The run is three independent steps (T1, 2026-11 health audit). Only the
+// feed step touches fda.gov; relink is pure DB work and the OFF fallback calls
+// Open Food Facts. They used to share one try block, so when fda.gov started
+// answering Convex's egress with HTTP 401 (2026-10-24) relink and OFF stopped
+// too, and press items already in the DB never joined later openFDA records.
+// Now each step catches its own failure and logs with its own tag, and the
+// others still run.
+//
+// sourceHealth (§10): `fda_rss` reports the FEED step only. That state means
+// "are we seeing FDA's press feed," which is what the reassurance gate needs
+// to know. Relink and OFF don't observe the feed, so their success must never
+// mark the source current while fda.gov is unreachable. Their failures are
+// internal bugs or an optional enrichment API (OFF isn't a §10 source), not a
+// coverage gap, so they log and fail the run without flipping `fda_rss`.
 export const ingest = internalAction({
   args: {},
   handler: async (ctx): Promise<PressIngestSummary> => {
+    const failures: { step: PressIngestStep; message: string }[] = [];
+    const fail = (step: PressIngestStep, error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[fda_rss:${step}] failed: ${message}`);
+      failures.push({ step, message });
+    };
+
+    // Step 1: feed + new press pages, the only step that reports health.
+    let feed: FeedResult = { feedItems: 0, pagesFetched: 0, recallsEnriched: 0 };
     try {
-      const xml = await fetchText(RSS_URL);
-      const items = parseRssItems(xml);
-
-      // Zero items from a feed that has produced items before is a parse/feed
-      // anomaly, not a quiet news week (§10, §15 scraper fragility).
-      const hadItems: boolean = await ctx.runQuery(internal.press.hasAny, {});
-      const anomaly = items.length === 0 && hadItems;
-
-      const newGuids: string[] = await ctx.runQuery(internal.press.filterNewGuids, {
-        guids: items.map((i) => i.guid),
-      });
-      const newGuidSet = new Set(newGuids);
-      const toFetch = items
-        .filter((i) => newGuidSet.has(i.guid))
-        .slice(0, MAX_PRESS_FETCHES_PER_RUN);
-
-      let pagesFetched = 0;
-      let recallsEnriched = 0;
-      for (const item of toFetch) {
-        const result = await ingestPressItem(ctx, item);
-        if (result === null) continue; // one bad page never fails the run
-        pagesFetched++;
-        recallsEnriched += result.matched;
-      }
-
-      const { relinked } = await ctx.runMutation(internal.press.relinkUnmatched, {});
-
-      // §3 fallback chain rung 2: Open Food Facts by UPC for recent recalls
-      // still without a press image.
-      let offImages = 0;
-      const candidates = await ctx.runQuery(internal.recalls.recentWithoutImage, {
-        limit: MAX_OFF_LOOKUPS_PER_RUN,
-      });
-      for (const candidate of candidates) {
-        for (const upc of candidate.productCodes.slice(0, 2)) {
-          const imageUrl = await fetchOffImage(upc).catch(() => null);
-          if (imageUrl) {
-            await ctx.runMutation(internal.recalls.applyImageFallback, {
-              recallId: candidate._id,
-              imageUrl,
-            });
-            offImages++;
-            break;
-          }
-        }
-      }
-
+      feed = await ingestFeed(ctx);
       await ctx.runMutation(internal.sourceHealth.reportRun, {
         source: "fda_rss",
         outcome: "success",
-        newRecords: pagesFetched,
-        anomaly,
+        newRecords: feed.pagesFetched,
+        anomaly: feed.anomaly,
       });
-      const summary: PressIngestSummary = {
-        feedItems: items.length,
-        pagesFetched,
-        recallsEnriched,
-        relinked,
-        offImages,
-      };
-      console.log(`[fda_rss] ingest: ${JSON.stringify(summary)}`);
-      return summary;
+      console.log(`[fda_rss:feed] ${JSON.stringify(feed)}`);
     } catch (error) {
+      fail("feed", error);
       await ctx.runMutation(internal.sourceHealth.reportRun, {
         source: "fda_rss",
         outcome: "failure",
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
     }
+
+    // Step 2: retry unmatched press items already in the DB (enforcement
+    // records lag press releases). Needs no network.
+    let relinked = 0;
+    try {
+      ({ relinked } = await ctx.runMutation(internal.press.relinkUnmatched, {}));
+      console.log(`[fda_rss:relink] relinked ${relinked}`);
+    } catch (error) {
+      fail("relink", error);
+    }
+
+    // Step 3: §3 fallback chain rung 2, Open Food Facts by UPC for recent
+    // recalls still without a press image.
+    let offImages = 0;
+    try {
+      offImages = await applyOffFallback(ctx);
+      console.log(`[fda_rss:off] applied ${offImages} image(s)`);
+    } catch (error) {
+      fail("off", error);
+    }
+
+    const summary: PressIngestSummary = {
+      feedItems: feed.feedItems,
+      pagesFetched: feed.pagesFetched,
+      recallsEnriched: feed.recallsEnriched,
+      relinked,
+      offImages,
+      failedSteps: failures.map((f) => f.step),
+    };
+    console.log(`[fda_rss] ingest: ${JSON.stringify(summary)}`);
+
+    // Still fail the run (dashboard + cron log) when any step failed, but only
+    // after every step has had its turn.
+    if (failures.length > 0) {
+      throw new Error(failures.map((f) => `${f.step}: ${f.message}`).join("; "));
+    }
+    return summary;
   },
 });
+
+type FeedResult = {
+  feedItems: number;
+  pagesFetched: number;
+  recallsEnriched: number;
+  anomaly?: boolean;
+};
+
+/** Fetch the RSS feed and the (few) new press pages it lists. Throws if the feed can't be read. */
+async function ingestFeed(ctx: ActionCtx): Promise<FeedResult> {
+  const xml = await fetchText(RSS_URL);
+  const items = parseRssItems(xml);
+
+  // Zero items from a feed that has produced items before is a parse/feed
+  // anomaly, not a quiet news week (§10, §15 scraper fragility).
+  const hadItems: boolean = await ctx.runQuery(internal.press.hasAny, {});
+  const anomaly = items.length === 0 && hadItems;
+
+  const newGuids: string[] = await ctx.runQuery(internal.press.filterNewGuids, {
+    guids: items.map((i) => i.guid),
+  });
+  const newGuidSet = new Set(newGuids);
+  const toFetch = items
+    .filter((i) => newGuidSet.has(i.guid))
+    .slice(0, MAX_PRESS_FETCHES_PER_RUN);
+
+  let pagesFetched = 0;
+  let recallsEnriched = 0;
+  for (const item of toFetch) {
+    const result = await ingestPressItem(ctx, item);
+    if (result === null) continue; // one bad page never fails the run
+    pagesFetched++;
+    recallsEnriched += result.matched;
+  }
+  return { feedItems: items.length, pagesFetched, recallsEnriched, anomaly };
+}
+
+/** Open Food Facts image fallback; returns how many recalls got an image. */
+async function applyOffFallback(ctx: ActionCtx): Promise<number> {
+  let offImages = 0;
+  const candidates = await ctx.runQuery(internal.recalls.recentWithoutImage, {
+    limit: MAX_OFF_LOOKUPS_PER_RUN,
+  });
+  for (const candidate of candidates) {
+    for (const upc of candidate.productCodes.slice(0, 2)) {
+      const imageUrl = await fetchOffImage(upc).catch(() => null);
+      if (imageUrl) {
+        await ctx.runMutation(internal.recalls.applyImageFallback, {
+          recallId: candidate._id,
+          imageUrl,
+        });
+        offImages++;
+        break;
+      }
+    }
+  }
+  return offImages;
+}
 
 /** Fetch + parse + record one press page; null (with a log) on failure. */
 async function ingestPressItem(
