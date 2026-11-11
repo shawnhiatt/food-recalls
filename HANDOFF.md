@@ -2,6 +2,10 @@
 
 Where the last session stopped. Newest entry first.
 
+## 2026-11-11: Figma baseline of the PWA (Figma baseline session)
+
+New Figma file: https://www.figma.com/design/XyJxXlBeqLsJFmPeoC68Qm ("Food Recalls — PWA baseline (2026-11)", SH team drafts). It has three pages: Foundations (34 variables plus 17 Public Sans text styles), Baseline (60 editable frames from the running app on dev `intent-donkey-676`, plus 4 read-only prod frames), and Annotations (34 observations for the UX audit). The test accounts are in `.env.example`. Dev now holds a "Baseline test household" with bookmarks, pantry scans and a pending invite. Prod was only viewed. Next: the UX and visual audit.
+
 ## 2026-11-11: Orientation after 4 months idle (Food Recalls (main))
 
 Fresh clone on this Mac. The Convex CLI is now linked (with Shawn's OK) to the existing dev deployment `intent-donkey-676` (team `shawn-hiatt-39210`, project `food-recalls`). `.env.local` is written, and main's code was pushed to dev with `convex dev --once`. Prod was only read. Nothing else changed in code.
