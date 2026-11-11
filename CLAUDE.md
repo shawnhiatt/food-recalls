@@ -38,6 +38,11 @@ npm run dev:web     # Next.js on :3000 (.claude/launch.json "web")
 6. **Copy follows SPEC §11:** calm and plain. "No known recall," never "safe." Possible matches say "possible."
 7. **Severity colors are quarantined** from the brand palette (SPEC §12).
 
+## Design
+
+- Figma baseline of the current PWA (2026-11-11): https://www.figma.com/design/XyJxXlBeqLsJFmPeoC68Qm. Pages: Foundations (SPEC §12 tokens as variables, the Public Sans ramp as used, code-vs-SPEC divergences), Baseline (60 frames at 390 and 320, grouped by flow), Annotations (observations for the UX audit). It shows what shipped. Don't edit it to match a redesign; put the redesign in a new file or new pages.
+- Dev test accounts used for captures are listed at the bottom of `.env.example`.
+
 ## Known upstream blocks
 
 FSIS and CDC answer HTTP 403 to non-browser clients (TLS-fingerprint bot detection, since 2026-07). Still true on 2026-11-11. `sourceHealth` reports them as unavailable, so the app never shows all-clear copy. See TODO "Data-source reliability."
