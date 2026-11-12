@@ -105,4 +105,19 @@ describe("food relevance + firm matching", () => {
     // Too-short normalized names never match (guards against "" ⊆ everything).
     expect(firmsLikelySame("Co. Inc.", "Acme Foods")).toBe(false);
   });
+
+  test("a name made only of generic words can't identify a firm (T6 follow-up)", () => {
+    // "M.G. Foods, Inc." normalizes to "foods": it used to contain-match every
+    // "… Foods" press company on prod.
+    expect(normalizeFirmName("M.G. Foods, Inc.")).toBe("foods");
+    expect(firmsLikelySame("Whole Foods Market", "M.G. Foods, Inc.")).toBe(false);
+    expect(firmsLikelySame("Taylor Fresh Foods", "M.G. Foods, Inc.")).toBe(false);
+    expect(firmsLikelySame("Fresh Foods International", "Foods International")).toBe(false);
+    // Distinctive names still match, including short and initial-heavy ones.
+    expect(firmsLikelySame("Taylor Fresh Foods", "Taylor Fresh Foods Inc")).toBe(true);
+    expect(firmsLikelySame("Oliva LLC.", "Oliva on Main")).toBe(true);
+    expect(firmsLikelySame("A&P Creations LLC", "A&P CREATIONS")).toBe(true);
+    expect(firmsLikelySame("Lidl US", "Lidl US TRADING")).toBe(true);
+    expect(firmsLikelySame("Prince Bakery Inc.", "Prince Bakery Inc")).toBe(true);
+  });
 });

@@ -3,6 +3,8 @@ import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { NormalizedRecall } from "../convex/adapters/types";
 import { setupConvex } from "./helpers";
+import page from "./fixtures/openfda/enforcement-page.json";
+import { normalizeOpenFdaRecord } from "../convex/adapters/openfda";
 
 // Press enrichment (convex/press.ts): press items patch matching enforcement
 // records with photo/risk groups/notice URL, and must do so WITHOUT creating
@@ -395,5 +397,163 @@ describe("recordPressItem window (T6)", () => {
     const result = await t.mutation(internal.press.recordPressItem, PRESS);
     expect(result.matched).toBe(1);
     expect((await t.run((ctx) => ctx.db.get(recallId)))!.imageSource).toBe("press");
+  });
+});
+
+describe("unlinkFalseMatches (repair of generic-name links, 2026-11-12)", () => {
+  test("drops false links, rebuilds the recall from raw + real links, reopens orphaned items", async () => {
+    const t = setupConvex();
+    vi.setSystemTime(new Date("2026-07-20T12:00:00Z"));
+
+    // A real openFDA record whose firm normalizes to the generic "foods".
+    const raw = { ...page.results[3], recalling_firm: "M.G. Foods, Inc." };
+    const base = normalizeOpenFdaRecord(raw);
+    if (!base.ok) throw new Error("fixture should normalize");
+    const mgId = await insertRecall(t, {
+      firm: "M.G. Foods, Inc.",
+      recallDate: base.record.recallDate,
+      // Polluted by Exotique's press item before the matcher fix:
+      sourceUrl: "https://www.fda.gov/press/exotique",
+      riskGroups: ["child", "pregnant"],
+    });
+    await t.run((ctx) =>
+      ctx.db.patch(mgId, {
+        raw,
+        imageUrl: "https://www.fda.gov/files/exotique.png",
+        imageSource: "press",
+      }),
+    );
+    const exotiqueId = await insertRecall(t, { firm: "Exotique Foods Inc" });
+
+    const insertPress = (over: Record<string, unknown>) =>
+      t.run((ctx) =>
+        ctx.db.insert("pressItems", {
+          ...PRESS,
+          fetchedAt: Date.now(),
+          lastMatchAttemptAt: Date.now(),
+          matchedRecallIds: [],
+          ...over,
+        }),
+      );
+    // Exotique: one false link (M.G.) and one real one (its own recall).
+    const exotiquePress = await insertPress({
+      guid: "exotique",
+      url: "https://www.fda.gov/press/exotique",
+      publishedAt: "2026-07-10",
+      companyName: "Exotique Foods Inc",
+      imageUrl: "https://www.fda.gov/files/exotique.png",
+      riskGroups: ["child", "pregnant"],
+      matchedRecallIds: [mgId, exotiqueId],
+    });
+    // Whole Foods: only the false link.
+    const wholeFoodsPress = await insertPress({
+      guid: "whole-foods",
+      url: "https://www.fda.gov/press/whole-foods",
+      publishedAt: "2026-07-12",
+      companyName: "Whole Foods Market",
+      matchedRecallIds: [mgId],
+    });
+    // M.G. Foods' own release. "foods" vs "foods" is generic-only too (E&E
+    // Foods and M.C.I. Foods normalize the same way), so it can't vouch for
+    // the link either.
+    await insertPress({
+      guid: "mg-foods",
+      url: "https://www.fda.gov/press/mg-foods",
+      publishedAt: "2026-07-15",
+      companyName: "M.G. Foods, Inc.",
+      imageUrl: "https://www.fda.gov/files/mg.png",
+      riskGroups: ["older_adult"],
+      matchedRecallIds: [mgId],
+    });
+
+    // Dry run reports without writing.
+    const dry = await t.mutation(internal.press.unlinkFalseMatches, { dryRun: true });
+    expect(dry).toMatchObject({ dryRun: true, linksDropped: 3, itemsReopened: 2 });
+    expect((await t.run((ctx) => ctx.db.get(mgId)))!.sourceUrl).toBe(
+      "https://www.fda.gov/press/exotique",
+    );
+
+    const result = await t.mutation(internal.press.unlinkFalseMatches, {});
+    expect(result).toMatchObject({
+      dryRun: false,
+      linksDropped: 3,
+      itemsReopened: 2,
+    });
+    const mgSourceId = (await t.run((ctx) => ctx.db.get(mgId)))!.sourceId;
+    expect(result.recallsRepaired).toEqual([mgSourceId]);
+
+    const mg = await t.run((ctx) => ctx.db.get(mgId));
+    expect(mg!.sourceUrl).toBe(base.record.sourceUrl); // back to the API link
+    expect(mg!.riskGroups).toEqual(base.record.riskGroups);
+    expect(mg!.imageUrl).toBeUndefined();
+    expect(mg!.imageSource).toBeUndefined();
+    expect(mg!.updateHistory).toHaveLength(1); // no revision
+
+    const exotique = await t.run((ctx) => ctx.db.get(exotiquePress));
+    expect(exotique!.matchedRecallIds).toEqual([exotiqueId]); // real link kept
+    const wholeFoods = await t.run((ctx) => ctx.db.get(wholeFoodsPress));
+    expect(wholeFoods!.matchedRecallIds).toEqual([]);
+    expect(wholeFoods!.lastMatchAttemptAt).toBe(0); // leads the next relink
+
+    // Relink doesn't recreate the false link, and the repair is idempotent.
+    vi.setSystemTime(new Date("2026-07-21T12:00:00Z"));
+    await t.mutation(internal.press.relinkUnmatched, {});
+    expect((await t.run((ctx) => ctx.db.get(wholeFoodsPress)))!.matchedRecallIds).toEqual([]);
+    const again = await t.mutation(internal.press.unlinkFalseMatches, {});
+    expect(again).toMatchObject({ linksDropped: 0, itemsReopened: 0, recallsRepaired: [] });
+  });
+
+  test("a repaired recall re-applies the press items still linked to it", async () => {
+    const t = setupConvex();
+    vi.setSystemTime(new Date("2026-07-20T12:00:00Z"));
+    const raw = { ...page.results[3], recalling_firm: "Summit Trail Foods Inc" };
+    const base = normalizeOpenFdaRecord(raw);
+    if (!base.ok) throw new Error("fixture should normalize");
+    const recallId = await insertRecall(t, {
+      firm: "Summit Trail Foods Inc",
+      sourceUrl: "https://www.fda.gov/press/wrong",
+      riskGroups: ["pregnant"],
+    });
+    await t.run((ctx) =>
+      ctx.db.patch(recallId, {
+        raw,
+        imageUrl: "https://www.fda.gov/files/wrong.png",
+        imageSource: "press",
+      }),
+    );
+    const press = (over: Record<string, unknown>) =>
+      t.run((ctx) =>
+        ctx.db.insert("pressItems", {
+          ...PRESS,
+          fetchedAt: Date.now(),
+          lastMatchAttemptAt: Date.now(),
+          matchedRecallIds: [recallId],
+          ...over,
+        }),
+      );
+    await press({
+      guid: "wrong",
+      url: "https://www.fda.gov/press/wrong",
+      companyName: "Gias Foods, Inc.", // false link
+      publishedAt: "2026-07-01",
+      imageUrl: "https://www.fda.gov/files/wrong.png",
+      riskGroups: ["pregnant"],
+    });
+    await press({
+      guid: "summit",
+      url: "https://www.fda.gov/press/summit",
+      companyName: "Summit Trail Foods",
+      publishedAt: "2026-07-05",
+      imageUrl: "https://www.fda.gov/files/summit.png",
+      riskGroups: ["child"],
+    });
+
+    const result = await t.mutation(internal.press.unlinkFalseMatches, {});
+    expect(result).toMatchObject({ linksDropped: 1, itemsReopened: 1 });
+    const recall = await t.run((ctx) => ctx.db.get(recallId));
+    expect(recall!.imageUrl).toBe("https://www.fda.gov/files/summit.png");
+    expect(recall!.imageSource).toBe("press");
+    expect(recall!.sourceUrl).toBe("https://www.fda.gov/press/summit");
+    expect(recall!.riskGroups).toEqual([...base.record.riskGroups, "child"]);
   });
 });

@@ -170,13 +170,56 @@ export function normalizeFirmName(name: string): string {
 }
 
 /**
+ * Words that say what kind of business a firm is, not which one. A name that
+ * normalizes to only these ("M.G. Foods, Inc." → "foods") would contain-match
+ * every "… Foods" company, so it can't identify a firm on its own.
+ */
+const GENERIC_FIRM_WORDS = new Set([
+  "food",
+  "foods",
+  "market",
+  "markets",
+  "farm",
+  "farms",
+  "produce",
+  "product",
+  "products",
+  "enterprise",
+  "enterprises",
+  "factory",
+  "group",
+  "industry",
+  "industries",
+  "international",
+  "global",
+  "trading",
+  "distribution",
+  "distributor",
+  "distributors",
+  "brand",
+  "brands",
+  "holdings",
+  "bakery",
+  "kitchen",
+  "kitchens",
+  "fresh",
+  "organic",
+  "organics",
+  "natural",
+  "naturals",
+]);
+
+/**
  * Do a press company name and an API firm name plausibly refer to the same
  * company? Containment either way after normalization — press pages write
- * "Mars Petcare US, Inc.", enforcement records "Mars Petcare".
+ * "Mars Petcare US, Inc.", enforcement records "Mars Petcare". The contained
+ * (shorter) name must carry at least one distinctive word.
  */
 export function firmsLikelySame(a: string, b: string): boolean {
   const na = normalizeFirmName(a);
   const nb = normalizeFirmName(b);
   if (na.length < 4 || nb.length < 4) return false;
+  const shorter = na.length <= nb.length ? na : nb;
+  if (shorter.split(" ").every((word) => GENERIC_FIRM_WORDS.has(word))) return false;
   return na.includes(nb) || nb.includes(na);
 }
