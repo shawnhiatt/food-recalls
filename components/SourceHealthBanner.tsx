@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { SOURCE_LABEL, type SourceCode } from "@/lib/copy";
+import { coverageGapLines, type SourceCode } from "@/lib/copy";
 
 type SourceStatus = { source: SourceCode; state: "current" | "delayed" | "unavailable"; lastSuccessAt: number };
 
@@ -51,24 +51,22 @@ export function SourceStatusPill() {
   );
 }
 
-function degradedMessage(sources: SourceStatus[]): string {
-  const names = sources.filter((s) => s.state !== "current").map((s) => SOURCE_LABEL[s.source]);
-  const joined =
-    names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
-  const verb = names.length === 1 ? "hasn't" : "haven't";
-  return `Coverage incomplete — ${joined} ${verb} updated recently. No matches in the data we have.`;
-}
-
 /**
  * Persistent, dismissible banner (§10) — shown only while a source is
  * degraded. Reassurance copy ("you're all clear") is never generated here;
  * that's the empty state's job, gated on `allCurrent` (see EmptyState).
+ *
+ * Two separate claims (UX-01): coverage (which sources are behind, since
+ * when) always; "no matches" only when a household really has zero matches,
+ * and never when signed out — there's nothing to match against.
  */
 export function SourceHealthBanner() {
   const status = useQuery(api.sourceHealth.getPublicStatus);
+  const matches = useQuery(api.feed.myMatches, {});
   const [dismissed, setDismissed] = useState(false);
 
   if (!status || status.allCurrent || dismissed) return null;
+  const gaps = coverageGapLines(status.sources, Date.now());
 
   return (
     <div
@@ -77,7 +75,12 @@ export function SourceHealthBanner() {
       className="mx-4 mt-3 flex items-start gap-3 rounded-(--radius-base) px-3 py-2.5 text-sm"
       style={{ background: "var(--color-secondary)", color: "var(--color-foreground)" }}
     >
-      <p className="flex-1">{degradedMessage(status.sources)}</p>
+      <div className="flex-1">
+        <p>
+          <strong>Coverage incomplete.</strong> {gaps.join(" ")}
+        </p>
+        {matches?.length === 0 && <p className="mt-1">No matches for your household in the data we have.</p>}
+      </div>
       <button
         type="button"
         onClick={() => setDismissed(true)}
