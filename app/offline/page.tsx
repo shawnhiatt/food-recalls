@@ -3,8 +3,10 @@ import { OfflineRetry } from "@/components/OfflineRetry";
 export const metadata = { title: "You're offline — Food Recalls" };
 
 export default function OfflinePage() {
+  // UX-13: was min-h-dvh, which the layout's header and tab bar pushed past
+  // the viewport. Padded like the other empty states instead.
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
+    <main className="flex flex-col items-center gap-4 px-6 py-16 text-center">
       <div
         className="flex h-16 w-16 items-center justify-center rounded-full"
         style={{ background: "var(--color-secondary)" }}

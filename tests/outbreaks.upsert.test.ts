@@ -123,6 +123,10 @@ describe("outbreaks public list/get", () => {
 
     const doc = await t.query(api.outbreaks.get, { id: list[0]!._id });
     expect(doc!.pathogen).toBe("E. coli");
+
+    // T8 / UX-13: a mangled link is "not found", never a thrown validator error.
+    expect(await t.query(api.outbreaks.get, { id: "nope" })).toBeNull();
+    expect(await t.query(api.outbreaks.get, { id: list[0]!._id.slice(0, -3) })).toBeNull();
     await drain(t);
   });
 

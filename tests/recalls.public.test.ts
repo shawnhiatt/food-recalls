@@ -169,4 +169,30 @@ describe("recalls.get", () => {
     expect(fetched?.sourceId).toBe("detail-test");
     expect(fetched?.updateHistory).toHaveLength(1);
   });
+
+  // T8 / UX-13: truncated or mangled links resolve to null instead of a
+  // validator error that crashes the detail page.
+  test("returns null for a malformed id, an id with its last character changed, or another table's id", async () => {
+    const t = setupConvex();
+    await seedRecalls(t, [recall({ sourceId: "bad-id-test" })]);
+    const doc = await t.query(internal.recalls.getBySourceId, { source: "fda", sourceId: "bad-id-test" });
+    const id = doc!._id as string;
+
+    expect(await t.query(api.recalls.get, { id: "not-an-id" })).toBeNull();
+    expect(await t.query(api.recalls.get, { id: "" })).toBeNull();
+    expect(await t.query(api.recalls.get, { id: id.slice(0, -4) })).toBeNull();
+    const flipped = id.slice(0, -1) + (id.endsWith("a") ? "b" : "a");
+    expect(await t.query(api.recalls.get, { id: flipped })).toBeNull();
+
+    const otherTableId = await t.run(async (ctx) =>
+      ctx.db.insert("sourceHealth", {
+        source: "fda",
+        state: "current",
+        lastAttemptAt: 0,
+        lastSuccessAt: 0,
+        consecutiveFailures: 0,
+      }),
+    );
+    expect(await t.query(api.recalls.get, { id: otherTableId })).toBeNull();
+  });
 });

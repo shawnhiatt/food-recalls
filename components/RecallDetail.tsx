@@ -1,15 +1,15 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { RecallImage } from "@/components/RecallImage";
 import { RiskLevelBadge } from "@/components/RiskLevelBadge";
 import { Timeline } from "@/components/Timeline";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { ShareButton } from "@/components/ShareButton";
 import { ReasonChips } from "@/components/ReasonChips";
+import { StatusMessage } from "@/components/StatusMessage";
 import { formatDate, formatGeography } from "@/lib/format";
 import {
   classifyRiskLevel,
@@ -30,8 +30,7 @@ import {
 // (Client Components can't export page metadata).
 export function RecallDetail() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const recall = useQuery(api.recalls.get, { id: params.id as Id<"recalls"> });
+  const recall = useQuery(api.recalls.get, { id: params.id });
   const match = useQuery(
     api.feed.matchForAlert,
     recall ? { alertId: recall._id, alertType: "recall" } : "skip",
@@ -39,17 +38,14 @@ export function RecallDetail() {
 
   if (recall === undefined) return <DetailSkeleton />;
   if (recall === null) {
+    // UX-13: truncated links, old shares and removed records all land here.
     return (
-      <main className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-        <p style={{ color: "var(--color-muted-foreground)" }}>This recall couldn&apos;t be found.</p>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="text-sm font-bold"
-          style={{ color: "var(--color-primary-text)" }}
-        >
-          Back to Feed
-        </button>
+      <main>
+        <StatusMessage
+          title="This alert isn't available anymore"
+          body="The link may be incomplete, or the recall was removed from the source. The feed has every current recall."
+          action={{ label: "Back to Feed", href: "/" }}
+        />
       </main>
     );
   }

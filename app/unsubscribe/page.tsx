@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { StatusMessage } from "@/components/StatusMessage";
 
 // One-click email unsubscribe (SPEC.md §2). Reached from a token link in every
 // email footer; no login required. Shows which address it affects, then one
@@ -23,9 +24,24 @@ function UnsubscribeInner() {
   const [done, setDone] = useState<null | string>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!token) return <Centered>Missing unsubscribe token.</Centered>;
+  // UX-13: a broken link still gets a way to manage email from the app.
+  if (!token || preview === null) {
+    return (
+      <main>
+        <StatusMessage
+          icon="link"
+          title="This unsubscribe link doesn't work"
+          body={
+            token
+              ? "It may be out of date. You can turn off recall emails from the Household tab instead."
+              : "The link looks incomplete. You can turn off recall emails from the Household tab instead."
+          }
+          action={{ label: "Go to Household", href: "/household" }}
+        />
+      </main>
+    );
+  }
   if (preview === undefined) return <Centered>Loading…</Centered>;
-  if (preview === null) return <Centered>This unsubscribe link isn&apos;t valid.</Centered>;
 
   async function handle() {
     setBusy(true);

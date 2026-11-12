@@ -369,10 +369,16 @@ export const list = query({
   },
 });
 
+/**
+ * Takes a plain string, not `v.id("recalls")`: detail URLs arrive truncated
+ * from SMS, email and old shares, and a validator error crashed the whole
+ * page (health audit §6, T8). A malformed or foreign id is just "not found".
+ */
 export const get = query({
-  args: { id: v.id("recalls") },
+  args: { id: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const id = ctx.db.normalizeId("recalls", args.id);
+    return id ? await ctx.db.get(id) : null;
   },
 });
 

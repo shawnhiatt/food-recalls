@@ -1,15 +1,15 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { OutbreakImage } from "@/components/OutbreakImage";
 import { OutbreakBadge } from "@/components/OutbreakBadge";
 import { Timeline } from "@/components/Timeline";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { ShareButton } from "@/components/ShareButton";
 import { ReasonChips } from "@/components/ReasonChips";
+import { StatusMessage } from "@/components/StatusMessage";
 import { formatDate, formatGeography, formatImpactLine } from "@/lib/format";
 import { OUTBREAK_STATUS_DESCRIPTION, RISK_GROUP_LABEL, type RiskGroup } from "@/lib/copy";
 
@@ -19,8 +19,7 @@ import { OUTBREAK_STATUS_DESCRIPTION, RISK_GROUP_LABEL, type RiskGroup } from "@
 // throughout per §11.
 export function OutbreakDetail() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const outbreak = useQuery(api.outbreaks.get, { id: params.id as Id<"outbreaks"> });
+  const outbreak = useQuery(api.outbreaks.get, { id: params.id });
   const match = useQuery(
     api.feed.matchForAlert,
     outbreak ? { alertId: outbreak._id, alertType: "outbreak" } : "skip",
@@ -29,16 +28,12 @@ export function OutbreakDetail() {
   if (outbreak === undefined) return <DetailSkeleton />;
   if (outbreak === null) {
     return (
-      <main className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-        <p style={{ color: "var(--color-muted-foreground)" }}>This outbreak couldn&apos;t be found.</p>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="text-sm font-bold"
-          style={{ color: "var(--color-primary-text)" }}
-        >
-          Back to Feed
-        </button>
+      <main>
+        <StatusMessage
+          title="This alert isn't available anymore"
+          body="The link may be incomplete, or CDC closed and removed this investigation. The feed has every current alert."
+          action={{ label: "Back to Feed", href: "/" }}
+        />
       </main>
     );
   }
