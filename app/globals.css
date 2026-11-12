@@ -17,7 +17,6 @@
   --color-secondary: #e5f2f8;
   --color-foreground: #121d1d;
   --color-muted-foreground: #6b7174;
-  --color-destructive: #cc272e;
   --color-border: rgba(18, 29, 29, 0.09);
   --radius-base: 0.625rem;
 
@@ -30,6 +29,21 @@
   --color-severity-resolved: #9ca3af;
   --color-severity-outbreak: #c2410c;
 
+  /* System colors (UX-10): status, counts, errors and destructive actions.
+     Never severity: a count, a form error or "Delete my account" must not
+     borrow Class I red, so these sit on visibly different hues. All pass
+     WCAG AA as text on white and --color-secondary. */
+  --color-status-count: #1f6483; /* nav badge fill (white text, 6.5:1) */
+  --color-status-warning: #92600a; /* degraded-source pill text (§10 "amber") */
+  --color-status-error: #a3164f; /* errors + destructive actions (7.5:1), berry not tomato */
+
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* `static`: ImagePlaceholder builds these names at runtime
+   (`var(--color-hazard-${hazardType}-tint)`), so Tailwind never sees them in a
+   class and would otherwise drop them from the compiled CSS (UX-02). */
+@theme static {
   /* Image-placeholder tints (§3), keyed to hazard type — a separate palette
      dimension from severity above; kept visually distinct so the two systems
      are never confused for each other. */
@@ -45,8 +59,6 @@
      the same deep-orange family as --color-severity-outbreak. */
   --color-hazard-outbreak-tint: #fce8db;
   --color-hazard-outbreak-fg: #c2410c;
-
-  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 html {

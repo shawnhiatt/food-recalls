@@ -50,6 +50,20 @@ describe("buildHouseholdSummary (§11 Step 5: banner derives from stored values)
       }),
     ).toBe("Recalls in NC · 2 adults · 1 kid · Recommended alerts");
   });
+
+  // UX-11: "adult 65+" everywhere (it was "65+ adult" here, "adult 65+" in onboarding).
+  test("65+ members read as adult 65+ and pluralize the noun", () => {
+    const summary = (n: number) =>
+      buildHouseholdSummary({
+        states: ["NC"],
+        allergens: [],
+        pets: [],
+        members: Array.from({ length: n }, () => ({ ageBand: "older_adult" as const })),
+        preset: "recommended",
+      });
+    expect(summary(1)).toBe("Recalls in NC · 1 adult 65+ · Recommended alerts");
+    expect(summary(2)).toBe("Recalls in NC · 2 adults 65+ · Recommended alerts");
+  });
 });
 
 describe("seedDefaultHousehold", () => {

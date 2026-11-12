@@ -190,10 +190,12 @@ export const list = query({
   },
 });
 
+/** String id + normalizeId, like recalls.get: a bad link is "not found", not a crash (T8). */
 export const get = query({
-  args: { id: v.id("outbreaks") },
+  args: { id: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const id = ctx.db.normalizeId("outbreaks", args.id);
+    return id ? await ctx.db.get(id) : null;
   },
 });
 

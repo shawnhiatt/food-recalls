@@ -1,15 +1,15 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { RecallImage } from "@/components/RecallImage";
 import { RiskLevelBadge } from "@/components/RiskLevelBadge";
 import { Timeline } from "@/components/Timeline";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { ShareButton } from "@/components/ShareButton";
 import { ReasonChips } from "@/components/ReasonChips";
+import { StatusMessage } from "@/components/StatusMessage";
 import { formatDate, formatGeography } from "@/lib/format";
 import {
   classifyRiskLevel,
@@ -18,6 +18,8 @@ import {
   RISK_LEVEL_DESCRIPTION,
   formatAllergenLabel,
   chainMatchExplanation,
+  firmNames,
+  recallSourceAttribution,
   type RiskGroup,
 } from "@/lib/copy";
 
@@ -28,8 +30,7 @@ import {
 // (Client Components can't export page metadata).
 export function RecallDetail() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const recall = useQuery(api.recalls.get, { id: params.id as Id<"recalls"> });
+  const recall = useQuery(api.recalls.get, { id: params.id });
   const match = useQuery(
     api.feed.matchForAlert,
     recall ? { alertId: recall._id, alertType: "recall" } : "skip",
@@ -37,17 +38,14 @@ export function RecallDetail() {
 
   if (recall === undefined) return <DetailSkeleton />;
   if (recall === null) {
+    // UX-13: truncated links, old shares and removed records all land here.
     return (
-      <main className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-        <p style={{ color: "var(--color-muted-foreground)" }}>This recall couldn&apos;t be found.</p>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="text-sm font-bold"
-          style={{ color: "var(--color-primary-text)" }}
-        >
-          Back to Feed
-        </button>
+      <main>
+        <StatusMessage
+          title="This alert isn't available anymore"
+          body="The link may be incomplete, or the recall was removed from the source. The feed has every current recall."
+          action={{ label: "Back to Feed", href: "/" }}
+        />
       </main>
     );
   }
@@ -82,7 +80,7 @@ export function RecallDetail() {
           </div>
         </div>
         <p className="text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-          Company: {recall.firm}
+          Company: {firmNames(recall.firm).join(", ")}
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -133,7 +131,7 @@ export function RecallDetail() {
               {recall.allergens.map((allergen) => (
                 <li
                   key={allergen}
-                  className="rounded-full px-2.5 py-1 text-xs font-medium capitalize"
+                  className="rounded-full px-2.5 py-1 text-xs font-medium"
                   style={{ background: "var(--color-secondary)", color: "var(--color-foreground)" }}
                 >
                   {formatAllergenLabel(allergen)}
@@ -166,7 +164,7 @@ export function RecallDetail() {
         )}
 
         <Section title="Timeline">
-          <Timeline entries={recall.updateHistory} />
+          <Timeline entries={recall.updateHistory} recallDate={recall.recallDate} />
         </Section>
 
         <a
@@ -179,8 +177,8 @@ export function RecallDetail() {
           View official source
         </a>
         <p className="mt-3 text-center text-xs" style={{ color: "var(--color-muted-foreground)" }}>
-          Data from openFDA/FSIS, unvalidated. Not an official alerting service — always verify
-          against the linked notice.
+          Data from {recallSourceAttribution(recall)}, unvalidated. Not an official alerting
+          service. Always check the linked notice.
         </p>
       </div>
     </main>

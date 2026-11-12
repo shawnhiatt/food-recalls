@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { StatusMessage } from "@/components/StatusMessage";
 
 // Invite acceptance (SPEC.md §2). The invitee must sign in with the invited
 // email (verified by OTP) before they can accept — enforced server-side in
@@ -20,7 +21,16 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
   if (invite === undefined || isLoading) return <Centered>Loading…</Centered>;
   if (invite === null || invite.status !== "pending") {
-    return <Centered>This invite isn&apos;t valid anymore. Ask for a new one.</Centered>;
+    return (
+      <main>
+        <StatusMessage
+          icon="link"
+          title="This invite has expired"
+          body="It was already used, revoked, or never existed. Ask whoever invited you to send a new one."
+          action={{ label: "Browse recalls", href: "/" }}
+        />
+      </main>
+    );
   }
 
   async function handleAccept() {
@@ -64,7 +74,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           Sign in to accept
         </Link>
       )}
-      {error && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-destructive)" }}>{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-status-error)" }}>{error}</p>}
     </main>
   );
 }

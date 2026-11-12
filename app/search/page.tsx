@@ -82,7 +82,7 @@ export default function SearchPage() {
         </div>
       ) : merged.length === 0 ? (
         <div className="mt-4">
-          <EmptyState variant="no-search-results" />
+          <EmptyState variant="no-search-results" action={{ label: "Clear search", onClick: () => setQuery("") }} />
         </div>
       ) : (
         <>

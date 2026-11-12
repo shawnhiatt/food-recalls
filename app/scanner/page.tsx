@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { formatRelativeTime } from "@/lib/format";
-import { archivedRecallExplanation, NO_KNOWN_RECALL_COPY, sameManufacturerExplanation } from "@/lib/copy";
+import { archivedRecallExplanation, firmNames, NO_KNOWN_RECALL_COPY, sameManufacturerExplanation } from "@/lib/copy";
 
 // Scanner tab (SPEC.md §12, Phase 7): camera UPC scan (in-store check +
 // pantry audit) with always-available manual entry, scan-to-pantry
@@ -151,7 +151,7 @@ function ScannerView() {
       </form>
 
       {error && (
-        <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-destructive)" }}>
+        <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-status-error)" }}>
           {error}
         </p>
       )}
@@ -178,7 +178,14 @@ function ScannerView() {
               className="flex items-center gap-3 rounded-(--radius-base) p-3"
               style={{
                 background: "var(--color-card)",
-                border: item.matched ? "1px solid var(--color-destructive)" : "1px solid var(--color-border)",
+                // UX-10: a confirmed match is the Class I verdict; "possible" is
+                // the same dashed outline as a possible store match (ReasonChips),
+                // so an unconfirmed match never reads as severity.
+                border: !item.matched
+                  ? "1px solid var(--color-border)"
+                  : item.confidence === "possible"
+                    ? "1px dashed var(--color-primary)"
+                    : "1px solid var(--color-severity-class1)",
               }}
             >
               <div className="min-w-0 flex-1">
@@ -195,8 +202,12 @@ function ScannerView() {
                       <Link
                         key={r._id}
                         href={`/recalls/${r._id}`}
-                        className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
-                        style={{ background: "var(--color-destructive)" }}
+                        className="rounded-full px-2 py-0.5 text-[11px] font-bold"
+                        style={
+                          item.confidence === "possible"
+                            ? { border: "1px dashed var(--color-primary)", color: "var(--color-primary-text)" }
+                            : { background: "var(--color-severity-class1)", color: "#fff" }
+                        }
                       >
                         {item.confidence === "possible" ? "Possible match" : "Matches a recall"}
                       </Link>
@@ -226,8 +237,8 @@ function ScanOutcomeCard({ outcome }: { outcome: ScanOutcome }) {
 
   if (outcome.status === "recall") {
     return (
-      <div className="mt-3 rounded-(--radius-base) border p-3" style={{ borderColor: "var(--color-destructive)", background: "var(--color-card)" }}>
-        <p className="text-sm font-bold" style={{ color: "var(--color-destructive)" }}>
+      <div className="mt-3 rounded-(--radius-base) border p-3" style={{ borderColor: "var(--color-severity-class1)", background: "var(--color-card)" }}>
+        <p className="text-sm font-bold" style={{ color: "var(--color-severity-class1)" }}>
           {name} matches an active recall
         </p>
         <RecallLinks recalls={outcome.matchedRecalls} />
@@ -242,7 +253,7 @@ function ScanOutcomeCard({ outcome }: { outcome: ScanOutcome }) {
           {outcome.productName ?? outcome.brand ?? "This barcode"}
         </p>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-          {sameManufacturerExplanation(outcome.matchedRecalls.map((r) => r.firm))}
+          {sameManufacturerExplanation(outcome.matchedRecalls.map((r) => firmNames(r.firm)[0]!))}
         </p>
         <RecallLinks recalls={outcome.matchedRecalls} />
       </div>

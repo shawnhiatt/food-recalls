@@ -70,7 +70,7 @@ export function OutbreakCard({
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <OutbreakBadge status={outbreak.status} />
           {impactLine && (
-            <span className="text-xs font-medium" style={{ color: "var(--color-destructive)" }}>
+            <span className="text-xs font-medium" style={{ color: "var(--color-severity-class1)" }}>
               {impactLine}
             </span>
           )}

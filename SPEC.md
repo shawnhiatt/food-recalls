@@ -546,12 +546,31 @@ wordmark and section headlines, Regular for dashboard UI and body text. Palette
 | `--secondary` | Tinted fills (banners, chips) | `#E5F2F8` |
 | `--foreground` / ink | Body text | `#121d1d` |
 | `--muted-foreground` | Secondary text | `#6b7174` |
-| `--destructive` | Danger / Class I red | `#cc272e` |
+| `--destructive` | Class I red (now `--color-severity-class1` only; see below) | `#cc272e` |
 | `--border` | Hairlines | `rgba(18, 29, 29, 0.09)` |
 | `--radius` | Base corner radius | `0.625rem` |
 
 Note: cards are white on a tinted background (not white-on-white). The severity system
-below maps onto these tokens: Class I uses `--destructive`, Class II uses `--accent`.
+below maps onto these tokens: Class I uses the `--destructive` value, Class II uses `--accent`.
+
+**Text variants** (WCAG AA 4.5:1 as text; the brand hexes above fail as text on white and
+`--secondary`): `--primary-text` `#1f6483` and `--accent-text` `#92600a`. Use them wherever
+the token colors text rather than filling an icon, a dot or a solid button. The UPDATE
+badge's outline and text use `--accent-text` (`#92600a`, a dark amber), not `#f3b838`, so
+it passes contrast and still never reads as a Class II fill.
+
+**System colors** (2026-11, UX-10): status, counts, errors and destructive actions get
+their own tokens, so they never borrow Class I red. There is no general `--destructive`
+token in code any more.
+
+| Token | Role | Value |
+|---|---|---|
+| `--status-count` | Nav badge fill (white text) | `#1f6483` |
+| `--status-warning` | Degraded source pill text, Delayed and Unavailable (§10 amber) | `#92600a` |
+| `--status-error` | Form, scan and push errors; destructive actions ("Delete my account", Unsubscribe, Revoke) | `#a3164f` |
+
+A "possible" match (store chain, pantry soft match) is a dashed `--primary` outline, never
+a severity fill. A confirmed pantry or scanner match is a verdict and uses Class I.
 **v1 ships light mode only** — the prototype's dark-mode block is unbranded scaffold
 output and must not ship as-is; a branded dark theme is a post-v1 design task.
 
@@ -575,8 +594,9 @@ double-checking") + deep link.
 all-clear copy with last-checked timestamp when sources are Current; explicit
 incompleteness copy when degraded.
 
-**Disclaimers:** footer + first-run: data from openFDA/FSIS/CDC, unvalidated, not an
-official alerting service.
+**Disclaimers:** footer + first-run: data from FDA recall records and press releases, USDA
+FSIS and CDC (in plain names; no "openFDA" in UI copy), unvalidated, not an official
+alerting service. The detail-page footer names only the sources that recall came from.
 
 ## 13. Phased build plan
 

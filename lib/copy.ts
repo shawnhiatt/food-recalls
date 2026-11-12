@@ -58,8 +58,14 @@ export const BIG_NINE_ALLERGENS = [
   "sesame",
 ] as const;
 
-export function formatAllergenLabel(allergen: string): string {
-  return allergen.replace(/_/g, " ");
+/**
+ * The one allergen formatter (UX-11). Standalone labels (chips, filter
+ * options) are sentence case: "Crustacean shellfish", "Milk". Inside running
+ * text ("Allergen: milk, peanuts") pass `{ inline: true }` for lowercase.
+ */
+export function formatAllergenLabel(allergen: string, opts: { inline?: boolean } = {}): string {
+  const words = allergen.replace(/_/g, " ").toLowerCase();
+  return opts.inline ? words : words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export type RiskGroup = "infant" | "child" | "pregnant" | "older_adult" | "immunocompromised";
@@ -106,12 +112,54 @@ export const OUTBREAK_STATUS_DESCRIPTION: Record<OutbreakStatus, string> = {
 
 export type SourceCode = "fda" | "fsis" | "fda_rss" | "cdc";
 
+/** Short scope names: what a source covers, so a gap says what's missing. */
 export const SOURCE_LABEL: Record<SourceCode, string> = {
-  fda: "FDA recall data",
-  fsis: "USDA meat & poultry data",
-  fda_rss: "FDA press release data",
-  cdc: "CDC outbreak data",
+  fda: "FDA recalls",
+  fsis: "USDA meat & poultry",
+  fda_rss: "FDA press releases",
+  cdc: "CDC outbreaks",
 };
+
+const SOURCE_ORDER: SourceCode[] = ["fda", "fda_rss", "fsis", "cdc"];
+
+/** "earlier today" / "Tuesday" / "Nov 3" / "July" / "July 2025" — coarser the older it is, so gaps group. */
+function sinceLabel(lastSuccessAt: number, now: number): string {
+  const then = new Date(lastSuccessAt);
+  const today = new Date(now);
+  const days = (now - lastSuccessAt) / 86_400_000;
+  if (then.toDateString() === today.toDateString()) return "earlier today";
+  if (days < 6) return then.toLocaleDateString("en-US", { weekday: "long" });
+  if (days < 30) return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (then.getFullYear() === today.getFullYear()) return then.toLocaleDateString("en-US", { month: "long" });
+  return then.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+/**
+ * Coverage lines for the source-health banner (SPEC.md §10, UX-01): which
+ * sources are behind and since when, one line per shared "since", oldest
+ * first. Coverage only — whether the household has matches is a separate
+ * claim the banner makes on its own (and never when signed out).
+ */
+export function coverageGapLines(
+  sources: { source: SourceCode; state: "current" | "delayed" | "unavailable"; lastSuccessAt: number }[],
+  now: number,
+): string[] {
+  const behind = sources
+    .filter((s) => s.state !== "current")
+    .sort(
+      (a, b) =>
+        a.lastSuccessAt - b.lastSuccessAt || SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source),
+    );
+  const groups = new Map<string, string[]>();
+  for (const s of behind) {
+    const key = s.lastSuccessAt === 0 ? "" : sinceLabel(s.lastSuccessAt, now);
+    groups.set(key, [...(groups.get(key) ?? []), SOURCE_LABEL[s.source]]);
+  }
+  return [...groups].map(([since, names]) => {
+    const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    return since === "" ? `${who}: no data yet.` : `${who}: no updates since ${since}.`;
+  });
+}
 
 // §8 feed personalization reason chips ("Your state," "Allergen: milk,"
 // "Publix," "Pet," "Infant risk") + §7/§14 Phase 6 chain "possible" labeling.
@@ -147,7 +195,9 @@ export function reasonChipLabel(dimension: MatchDimension, details?: string[]): 
     case "pet":
       return "Pet";
     case "allergen":
-      return details?.length ? `Allergen: ${details.map(formatAllergenLabel).join(", ")}` : "Allergen match";
+      return details?.length
+        ? `Allergen: ${details.map((a) => formatAllergenLabel(a, { inline: true })).join(", ")}`
+        : "Allergen match";
     case "risk_group":
       return details?.length
         ? details.map((g) => RISK_GROUP_CHIP_LABEL[g] ?? g).join(", ")
@@ -162,6 +212,56 @@ export function reasonChipLabel(dimension: MatchDimension, details?: string[]): 
     case "keyword":
       return details?.length ? details.join(", ") : "Your keyword";
   }
+}
+
+/**
+ * Raw firm strings sometimes list several companies separated by ";"
+ * ("Chicken of the Sea; Thai Union"). Cards show the first; detail lists all.
+ * A "; dba …" segment is the same company's trade name, so it stays attached.
+ */
+export function firmNames(firm: string): string[] {
+  const names: string[] = [];
+  for (const part of firm.split(";").map((f) => f.trim()).filter(Boolean)) {
+    if (names.length > 0 && /^(dba|d\/b\/a)\b/i.test(part)) names[names.length - 1] += ` ${part}`;
+    else names.push(part);
+  }
+  return names.length > 0 ? names : [firm];
+}
+
+/** §11 risk wording for a raw classification inside a sentence ("moderate", "not yet rated"). */
+function riskPhrase(classification: string): string {
+  const level = classifyRiskLevel(classification);
+  if (level !== "unknown") return level;
+  return /not yet classified/i.test(classification) || !classification.trim() ? "not yet rated" : classification;
+}
+
+/**
+ * Timeline summaries are generated at ingest and stored, so older entries
+ * still carry agency wording ("classification changed from Class II to Not
+ * Yet Classified"). Map them through §11 at render time (UX-11).
+ */
+export function plainTimelineSummary(summary: string): string {
+  return summary.replace(
+    /classification changed from (.+?) to (.+?)(?=;|$)/i,
+    (_, from: string, to: string) => `risk level changed from ${riskPhrase(from)} to ${riskPhrase(to)}`,
+  ).replace(/^risk level/, "Risk level");
+}
+
+/**
+ * Detail-page attribution (UX-11): name the agency this recall actually came
+ * from, plus the FDA press release when one enriched it. Plain names, no API
+ * jargon ("openFDA").
+ */
+export function recallSourceAttribution(recall: {
+  source: "fda" | "fsis";
+  sourceUrl: string;
+  imageSource?: string;
+}): string {
+  if (recall.source === "fsis") return "USDA's Food Safety and Inspection Service";
+  // Press enrichment (convex/press.ts) swaps the synthetic api.fda.gov link
+  // for the press page and may add its photo.
+  const pressLinked = recall.imageSource === "press" || !recall.sourceUrl.includes("api.fda.gov");
+  return pressLinked ? "FDA recall records and an FDA press release" : "FDA recall records";
 }
 
 /** §11: the plain-language explanation of a chain ("possible") match. */

@@ -47,7 +47,7 @@ export function BottomNav() {
                     <span
                       aria-hidden="true"
                       className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-                      style={{ background: "var(--color-destructive)" }}
+                      style={{ background: "var(--color-status-count)" }}
                     >
                       {badge > 9 ? "9+" : badge}
                     </span>

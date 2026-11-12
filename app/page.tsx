@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { RecallCard, type RecallCardData } from "@/components/RecallCard";
@@ -70,8 +70,28 @@ export default function FeedPage() {
     );
   }, [results, filteredOutbreaks, filters.matchedOnly, matchedIds]);
 
+  // state/allergen filters run per page server-side (recalls.list), so a
+  // filtered page can come back empty while older pages still match. Keep
+  // fetching while the list is empty, a bounded number of times, rather than
+  // showing "No recalls match" with a "Load more" under it (UX-13).
+  const AUTO_LOAD_LIMIT = 4; // × 100 rows: same reach as the old manual "Load more" taps, fewer round trips
+  const autoLoads = useRef(0);
+  useEffect(() => {
+    autoLoads.current = 0;
+  }, [filters]);
+  const searchingFurther =
+    merged.length === 0 && status !== "Exhausted" && autoLoads.current < AUTO_LOAD_LIMIT;
+  useEffect(() => {
+    if (merged.length === 0 && status === "CanLoadMore" && autoLoads.current < AUTO_LOAD_LIMIT) {
+      autoLoads.current += 1;
+      loadMore(100);
+    }
+  }, [merged.length, status, loadMore]);
+
   const isLoading =
-    status === "LoadingFirstPage" || (filters.matchedOnly && myMatches === undefined);
+    status === "LoadingFirstPage" ||
+    (filters.matchedOnly && myMatches === undefined) ||
+    (hasActiveFilters && searchingFurther);
 
   return (
     <main>
@@ -92,6 +112,13 @@ export default function FeedPage() {
       ) : merged.length === 0 ? (
         <EmptyState
           variant={filters.matchedOnly ? "no-household-matches" : hasActiveFilters ? "no-results" : "no-data"}
+          action={
+            filters.matchedOnly
+              ? { label: "Show all recalls", onClick: () => setFilters({ ...filters, matchedOnly: false }) }
+              : hasActiveFilters
+                ? { label: "Clear filters", onClick: () => setFilters({}) }
+                : undefined
+          }
         />
       ) : (
         <>
@@ -114,7 +141,9 @@ export default function FeedPage() {
         </>
       )}
 
-      {status === "CanLoadMore" && (
+      {/* Never under an empty state (UX-13). A filtered page can come back
+          empty while later pages still exist; "Clear filters" is the way on. */}
+      {status === "CanLoadMore" && !isLoading && merged.length > 0 && (
         <div className="px-4 pb-6">
           <button
             type="button"

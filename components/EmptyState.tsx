@@ -14,10 +14,14 @@ import { formatRelativeTime } from "@/lib/format";
  */
 export function EmptyState({
   variant,
+  action,
 }: {
   variant: "no-results" | "no-data" | "no-household-matches" | "no-search-results";
+  /** UX-13: the one way forward (clear filters, clear search). */
+  action?: { label: string; onClick: () => void };
 }) {
   const status = useQuery(api.sourceHealth.getPublicStatus);
+  const degraded = Boolean(status && !status.allCurrent);
 
   // Oldest last-success across sources — the most conservative honest claim.
   const oldestSuccess =
@@ -25,15 +29,28 @@ export function EmptyState({
       ? Math.min(...status.sources.map((s) => s.lastSuccessAt))
       : null;
 
+  // Titles never reassure: "nothing matches" is a fact about the query, not
+  // a safety claim. All-clear wording stays gated on every source Current.
+  const title =
+    variant === "no-household-matches"
+      ? "Nothing matches your household right now"
+      : variant === "no-search-results"
+      ? "No results"
+      : variant === "no-results"
+      ? "No recalls match these filters"
+      : degraded
+        ? "Coverage incomplete"
+        : "No recalls right now";
+
   const body =
     variant === "no-household-matches"
-      ? "Nothing currently matches your household preferences. That's not the same as “all clear” on the full feed — clear this filter to see everything."
+      ? "That's not the same as “all clear” on the full feed. Clear this filter to see everything."
       : variant === "no-search-results"
-      ? "Nothing matches that search. Try fewer or different words — a product, brand, company, or barcode — or check the spelling."
+      ? "Try fewer or different words — a product, brand, company, or barcode — or check the spelling."
       : variant === "no-results"
-      ? "No recalls match these filters. Try clearing one or two."
-      : status && !status.allCurrent
-        ? "Coverage incomplete — we can't confirm the feed is fully up to date yet. Nothing here should be read as “all clear.”"
+      ? "Try clearing one or two."
+      : degraded
+        ? "We can't confirm the feed is fully up to date yet. Nothing here should be read as “all clear.”"
         : `No recalls in our records right now. We'll show them here the moment a source reports one.${
             oldestSuccess ? ` Sources last checked ${formatRelativeTime(oldestSuccess)}.` : ""
           }`;
@@ -52,9 +69,22 @@ export function EmptyState({
           <path d="M4 20h7" />
         </svg>
       </div>
+      <h2 className="text-lg font-bold" style={{ color: "var(--color-foreground)" }}>
+        {title}
+      </h2>
       <p className="max-w-xs text-sm" style={{ color: "var(--color-muted-foreground)" }}>
         {body}
       </p>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="mt-2 inline-flex min-h-11 items-center rounded-full px-5 text-sm font-bold text-white"
+          style={{ background: "var(--color-primary)" }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
