@@ -23,6 +23,7 @@ import type * as household from "../household.js";
 import type * as http from "../http.js";
 import type * as images from "../images.js";
 import type * as ingest_cdc from "../ingest/cdc.js";
+import type * as ingest_fdaRelay from "../ingest/fdaRelay.js";
 import type * as ingest_fdaRss from "../ingest/fdaRss.js";
 import type * as ingest_fsis from "../ingest/fsis.js";
 import type * as ingest_lib from "../ingest/lib.js";
@@ -76,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   images: typeof images;
   "ingest/cdc": typeof ingest_cdc;
+  "ingest/fdaRelay": typeof ingest_fdaRelay;
   "ingest/fdaRss": typeof ingest_fdaRss;
   "ingest/fsis": typeof ingest_fsis;
   "ingest/lib": typeof ingest_lib;
