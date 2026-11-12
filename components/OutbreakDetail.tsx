@@ -78,7 +78,7 @@ export function OutbreakDetail() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <OutbreakBadge status={outbreak.status} />
           {impactLine && (
-            <span className="text-xs font-bold" style={{ color: "var(--color-destructive)" }}>
+            <span className="text-xs font-bold" style={{ color: "var(--color-severity-class1)" }}>
               {impactLine}
             </span>
           )}

@@ -59,7 +59,7 @@ function UnsubscribeInner() {
         onClick={handle}
         disabled={busy}
         className="mt-6 min-h-[44px] rounded-full px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
-        style={{ background: "var(--color-destructive)" }}
+        style={{ background: "var(--color-status-error)" }}
       >
         {busy ? "Unsubscribing…" : "Unsubscribe"}
       </button>

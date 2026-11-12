@@ -282,7 +282,7 @@ function InvitesSection() {
                 type="button"
                 onClick={() => revokeInvite({ token: inv.token })}
                 className="text-xs font-semibold underline"
-                style={{ color: "var(--color-destructive)" }}
+                style={{ color: "var(--color-status-error)" }}
               >
                 Revoke
               </button>
@@ -309,7 +309,7 @@ function InvitesSection() {
           {busy ? "…" : "Invite"}
         </button>
       </form>
-      {error && <p role="alert" className="mt-2 text-xs" style={{ color: "var(--color-destructive)" }}>{error}</p>}
+      {error && <p role="alert" className="mt-2 text-xs" style={{ color: "var(--color-status-error)" }}>{error}</p>}
     </Section>
   );
 }
@@ -370,12 +370,12 @@ function AccountSection({ role }: { role: "owner" | "member" }) {
             type="button"
             onClick={() => setConfirming(true)}
             className="w-full rounded-full py-2.5 text-sm font-semibold"
-            style={{ color: "var(--color-destructive)" }}
+            style={{ color: "var(--color-status-error)" }}
           >
             Delete my account
           </button>
         ) : (
-          <div className="rounded-lg border p-3" style={{ borderColor: "var(--color-destructive)" }}>
+          <div className="rounded-lg border p-3" style={{ borderColor: "var(--color-status-error)" }}>
             <p className="text-sm" style={{ color: "var(--color-foreground)" }}>
               {role === "owner"
                 ? "This deletes your account. If you're the last member, your household and its preferences are deleted too. This can't be undone."
@@ -387,7 +387,7 @@ function AccountSection({ role }: { role: "owner" | "member" }) {
                 onClick={confirmDelete}
                 disabled={busy}
                 className="flex-1 rounded-full py-2 text-sm font-bold text-white disabled:opacity-60"
-                style={{ background: "var(--color-destructive)" }}
+                style={{ background: "var(--color-status-error)" }}
               >
                 {busy ? "Deleting…" : "Delete permanently"}
               </button>

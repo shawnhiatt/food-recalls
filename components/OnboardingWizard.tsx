@@ -135,7 +135,7 @@ export function OnboardingWizard({
       {step === 4 && <StepReview answers={answers} />}
 
       {error && (
-        <p role="alert" className="mt-4 text-sm" style={{ color: "var(--color-destructive)" }}>
+        <p role="alert" className="mt-4 text-sm" style={{ color: "var(--color-status-error)" }}>
           {error}
         </p>
       )}
@@ -326,7 +326,7 @@ function StepWho({ answers, patch }: StepProps) {
                     type="button"
                     onClick={() => patch({ people: { ...answers.people, members: members.filter((_, j) => j !== i) } })}
                     className="shrink-0 text-xs font-semibold"
-                    style={{ color: "var(--color-destructive)" }}
+                    style={{ color: "var(--color-status-error)" }}
                   >
                     Remove
                   </button>

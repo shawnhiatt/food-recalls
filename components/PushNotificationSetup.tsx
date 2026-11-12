@@ -148,13 +148,13 @@ export function PushNotificationSetup({
         </p>
       )}
       {status === "denied" && (
-        <p className="mt-2.5 text-xs" style={{ color: "var(--color-destructive)" }}>
+        <p className="mt-2.5 text-xs" style={{ color: "var(--color-status-error)" }}>
           Notifications are blocked for this site. Enable them in your browser&apos;s site
           settings to turn on alerts.
         </p>
       )}
       {status === "error" && (
-        <p className="mt-2.5 text-xs" style={{ color: "var(--color-destructive)" }}>
+        <p className="mt-2.5 text-xs" style={{ color: "var(--color-status-error)" }}>
           Something went wrong enabling alerts. Try again.
         </p>
       )}

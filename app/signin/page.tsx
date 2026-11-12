@@ -108,7 +108,7 @@ export default function SignInPage() {
         )}
 
         {error && (
-          <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-destructive)" }}>
+          <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-status-error)" }}>
             {error}
           </p>
         )}

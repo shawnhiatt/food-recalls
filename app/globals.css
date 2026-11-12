@@ -17,7 +17,6 @@
   --color-secondary: #e5f2f8;
   --color-foreground: #121d1d;
   --color-muted-foreground: #6b7174;
-  --color-destructive: #cc272e;
   --color-border: rgba(18, 29, 29, 0.09);
   --radius-base: 0.625rem;
 
@@ -29,6 +28,14 @@
   --color-severity-class3: #64748b;
   --color-severity-resolved: #9ca3af;
   --color-severity-outbreak: #c2410c;
+
+  /* System colors (UX-10): status, counts, errors and destructive actions.
+     Never severity: a count, a form error or "Delete my account" must not
+     borrow Class I red, so these sit on visibly different hues. All pass
+     WCAG AA as text on white and --color-secondary. */
+  --color-status-count: #1f6483; /* nav badge fill (white text, 6.5:1) */
+  --color-status-warning: #92600a; /* degraded-source pill text (§10 "amber") */
+  --color-status-error: #a3164f; /* errors + destructive actions (7.5:1), berry not tomato */
 
   --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
 }

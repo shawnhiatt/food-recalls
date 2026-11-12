@@ -8,17 +8,19 @@ import { coverageGapLines, type SourceCode } from "@/lib/copy";
 type SourceStatus = { source: SourceCode; state: "current" | "delayed" | "unavailable"; lastSuccessAt: number };
 
 // Text uses the darker *-text variants (WCAG AA against --color-secondary);
-// the dot is decorative and can stay at full brand/severity saturation.
+// the dot is decorative and can stay at full saturation. Degraded is amber in
+// both states (§10), never Class I red (UX-10): it's a coverage status, not a
+// recall severity. The label tells Delayed and Unavailable apart.
 const STATUS_TEXT_COLOR: Record<SourceStatus["state"], string> = {
   current: "var(--color-primary-text)",
-  delayed: "var(--color-accent-text)",
-  unavailable: "var(--color-destructive)",
+  delayed: "var(--color-status-warning)",
+  unavailable: "var(--color-status-warning)",
 };
 
 const STATUS_DOT_COLOR: Record<SourceStatus["state"], string> = {
   current: "var(--color-primary)",
   delayed: "var(--color-accent)",
-  unavailable: "var(--color-destructive)",
+  unavailable: "var(--color-accent)",
 };
 
 const STATUS_LABEL: Record<SourceStatus["state"], string> = {

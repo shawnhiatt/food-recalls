@@ -64,7 +64,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           Sign in to accept
         </Link>
       )}
-      {error && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-destructive)" }}>{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--color-status-error)" }}>{error}</p>}
     </main>
   );
 }
