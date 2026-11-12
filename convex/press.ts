@@ -1,7 +1,8 @@
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { firmsLikelySame } from "./adapters/fdaRss";
+import { normalizeOpenFdaRecord } from "./adapters/openfda";
 
 // FDA press-release enrichment (SPEC.md §3/§4 — Phase 1 item). Press items
 // never create recall records; they ENRICH matching enforcement records with
@@ -321,5 +322,105 @@ export const relinkUnmatched = internalMutation({
       if (matches.length > 0) relinked++;
     }
     return { relinked, attempted };
+  },
+});
+
+/**
+ * One-off repair (2026-11-12): drop press→recall links the firm matcher no
+ * longer accepts, and rebuild the enrichment of every recall that lost one.
+ * Before firmsLikelySame required a distinctive word, "M.G. Foods, Inc."
+ * (normalized "foods") linked to every "… Foods" press item, so that recall
+ * showed another firm's photo, notice URL and risk groups, and those press
+ * items stopped retrying for their real twins.
+ *
+ * A repaired recall starts again from what the openFDA adapter derives from
+ * its stored `raw` record (synthetic sourceUrl, API risk groups, no press
+ * image; an Open Food Facts image is kept), then re-applies the press items
+ * still linked to it. Press items left with no links become pending again and
+ * lead the next relink run. No revision and no dispatch, as with enrichment.
+ * Idempotent: a second run finds nothing to drop.
+ *
+ *   npx convex run press:unlinkFalseMatches '{"dryRun": true}'
+ *   npx convex run press:unlinkFalseMatches
+ */
+export const unlinkFalseMatches = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const dryRun = args.dryRun ?? false;
+    const recalls = new Map<Id<"recalls">, Doc<"recalls"> | null>();
+    const getRecall = async (id: Id<"recalls">) => {
+      if (!recalls.has(id)) recalls.set(id, await ctx.db.get(id));
+      return recalls.get(id)!;
+    };
+
+    const items = await ctx.db.query("pressItems").collect();
+    const keptLinks = new Map<Id<"recalls">, Doc<"pressItems">[]>();
+    const affected = new Set<Id<"recalls">>();
+    const dropped: Array<{ press: string; firm: string; sourceId: string }> = [];
+    let itemsReopened = 0;
+    for (const item of items) {
+      if (item.matchedRecallIds.length === 0) continue;
+      const keep: Id<"recalls">[] = [];
+      for (const id of item.matchedRecallIds) {
+        const recall = await getRecall(id);
+        if (!recall) continue; // deleted recall: drop the dangling id
+        if (firmsLikelySame(item.companyName, recall.firm)) {
+          keep.push(id);
+          keptLinks.set(id, [...(keptLinks.get(id) ?? []), item]);
+        } else {
+          affected.add(id);
+          dropped.push({ press: item.companyName, firm: recall.firm, sourceId: recall.sourceId });
+        }
+      }
+      if (keep.length === item.matchedRecallIds.length) continue;
+      if (keep.length === 0) itemsReopened++;
+      if (!dryRun) {
+        await ctx.db.patch(item._id, {
+          matchedRecallIds: keep,
+          // Reopened items go to the front of the relink queue.
+          ...(keep.length === 0 ? { lastMatchAttemptAt: 0 } : {}),
+        });
+      }
+    }
+
+    const repaired: string[] = [];
+    const skipped: string[] = [];
+    for (const id of affected) {
+      const recall = (await getRecall(id))!;
+      const base = recall.source === "fda" ? normalizeOpenFdaRecord(recall.raw) : null;
+      if (!base?.ok) {
+        skipped.push(recall.sourceId);
+        continue;
+      }
+      repaired.push(recall.sourceId);
+      if (dryRun) continue;
+      const reset: Partial<Doc<"recalls">> = {
+        sourceUrl: base.record.sourceUrl,
+        riskGroups: base.record.riskGroups,
+        updatedAt: now,
+      };
+      if (recall.imageSource === "press") {
+        reset.imageUrl = undefined;
+        reset.imageSource = undefined;
+        reset.imageStorageId = undefined;
+        if (recall.imageStorageId) await ctx.storage.delete(recall.imageStorageId);
+      }
+      await ctx.db.patch(id, reset);
+      let current: Doc<"recalls"> = { ...recall, ...reset };
+      const linked = (keptLinks.get(id) ?? []).sort((a, b) =>
+        a.publishedAt.localeCompare(b.publishedAt),
+      );
+      for (const item of linked) current = await applyToRecall(ctx, current, item, now);
+    }
+
+    return {
+      dryRun,
+      linksDropped: dropped.length,
+      itemsReopened,
+      recallsRepaired: repaired,
+      recallsSkipped: skipped,
+      dropped,
+    };
   },
 });
