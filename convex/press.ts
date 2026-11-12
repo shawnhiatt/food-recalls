@@ -13,19 +13,75 @@ import { firmsLikelySame } from "./adapters/fdaRss";
 // are not content-hash material fields (§4/§6), so applying press data never
 // appends a timeline entry and never schedules notification dispatch — the
 // feed picks the changes up reactively. Press releases precede enforcement
-// records by days-to-weeks, so unmatched items are retried on every ingest
-// run (relinkUnmatched) until the API record lands or the window lapses.
+// records by days-to-weeks, so unmatched items are retried on later ingest
+// runs (relinkUnmatched, least recently tried first) until the API record
+// lands or the item ages out.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How far apart a press date and a recall's recallDate may be and still link. */
 const MATCH_WINDOW_DAYS = 120;
 /** Stop retrying unmatched press items after this long. */
 const RELINK_WINDOW_DAYS = 180;
+/** Most press items one relink run tries (least recently tried first). */
 const RELINK_BATCH = 25;
+/**
+ * Most recall docs one mutation reads while matching. Recall docs carry
+ * multi-KB `raw` blobs: ~2.7 KB on average, ~4.9 KB at p99 (2026-11 health
+ * audit), so 2,500 docs is ~7 MB typical and ~12 MB worst case, under
+ * Convex's 16 MiB per-function read limit. One ±120-day window held ~1,700
+ * recalls in the densest stretch seen so far (Apr–May 2026), so a single
+ * window always fits; a relink batch stops early when the budget runs out.
+ */
+const SCAN_BUDGET = 2500;
 
 function isoDaysFrom(iso: string, days: number): string {
   const ms = Date.parse(`${iso}T00:00:00Z`);
   return new Date(ms + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+type MatchWindow = { start: string; end: string };
+
+/** The inclusive recallDate range a press item may link within. */
+function matchWindow(publishedAt: string): MatchWindow {
+  return {
+    start: isoDaysFrom(publishedAt, -MATCH_WINDOW_DAYS),
+    end: isoDaysFrom(publishedAt, MATCH_WINDOW_DAYS),
+  };
+}
+
+/**
+ * Recalls with recallDate in (after, end] — or [start, end] when `after` is
+ * null — ascending, reading at most `limit + 1` docs. `truncated` means the
+ * range held more than `limit`; `docs` is then cut to `limit`.
+ */
+async function scanRecalls(
+  ctx: MutationCtx,
+  range: { start: string; after: string | null; end: string },
+  limit: number,
+): Promise<{ docs: Doc<"recalls">[]; truncated: boolean }> {
+  const { start, after, end } = range;
+  const docs = await ctx.db
+    .query("recalls")
+    .withIndex("by_recall_date", (q) =>
+      after === null
+        ? q.gte("recallDate", start).lte("recallDate", end)
+        : q.gt("recallDate", after).lte("recallDate", end),
+    )
+    .take(limit + 1);
+  const truncated = docs.length > limit;
+  return { docs: truncated ? docs.slice(0, limit) : docs, truncated };
+}
+
+/** Is this recall a plausible enforcement twin of the press item? */
+function isTwin(recall: Doc<"recalls">, companyName: string, window: MatchWindow): boolean {
+  return (
+    // FSIS publishes its own press pages with real photos via its API; FDA
+    // press releases only ever describe FDA-regulated recalls.
+    recall.source === "fda" &&
+    recall.recallDate >= window.start &&
+    recall.recallDate <= window.end &&
+    firmsLikelySame(companyName, recall.firm)
+  );
 }
 
 /** Guids from the feed that have no pressItems row yet (i.e. pages to fetch). */
@@ -70,28 +126,31 @@ async function matchingRecalls(
   publishedAt: string,
 ): Promise<Doc<"recalls">[]> {
   if (!companyName || !publishedAt) return [];
-  const windowStart = isoDaysFrom(publishedAt, -MATCH_WINDOW_DAYS);
-  const windowEnd = isoDaysFrom(publishedAt, MATCH_WINDOW_DAYS);
-  const candidates = await ctx.db
-    .query("recalls")
-    .withIndex("by_recall_date", (q) =>
-      q.gte("recallDate", windowStart).lte("recallDate", windowEnd),
-    )
-    .take(500);
-  return candidates.filter(
-    // FSIS publishes its own press pages with real photos via its API; FDA
-    // press releases only ever describe FDA-regulated recalls.
-    (recall) => recall.source === "fda" && firmsLikelySame(companyName, recall.firm),
+  const window = matchWindow(publishedAt);
+  const { docs, truncated } = await scanRecalls(
+    ctx,
+    { start: window.start, after: null, end: window.end },
+    SCAN_BUDGET,
   );
+  if (truncated) {
+    console.warn(
+      `[press] match window ${window.start}..${window.end} holds more than ${SCAN_BUDGET} recalls; matched within the first ${SCAN_BUDGET}`,
+    );
+  }
+  return docs.filter((recall) => isTwin(recall, companyName, window));
 }
 
-/** Patch one recall with press enrichment. No timeline entry, no dispatch. */
+/**
+ * Patch one recall with press enrichment. No timeline entry, no dispatch.
+ * Returns the recall as patched, so a caller holding docs in memory stays
+ * current when a second press item matches the same recall.
+ */
 async function applyToRecall(
   ctx: MutationCtx,
   recall: Doc<"recalls">,
   press: PressFields,
   now: number,
-): Promise<void> {
+): Promise<Doc<"recalls">> {
   const patch: Record<string, unknown> = { updatedAt: now };
   if (press.imageUrl && recall.imageSource !== "press") {
     patch.imageUrl = press.imageUrl;
@@ -107,6 +166,7 @@ async function applyToRecall(
     patch.sourceUrl = press.url;
   }
   await ctx.db.patch(recall._id, patch);
+  return { ...recall, ...patch };
 }
 
 /**
@@ -164,18 +224,28 @@ export const recordPressItem = internalMutation({
  * press releases by days-to-weeks, so most links form on a later run, when
  * the openFDA record finally exists.
  *
- * The candidate window is scanned ONCE for the whole batch, then matched in
- * memory: recall docs carry multi-KB `raw` blobs, so a per-item scan (like
- * recordPressItem's single matchingRecalls call) multiplied across a batch
- * blows Convex's 16MB per-execution read limit — verified live.
+ * Fair queueing: each run tries the RELINK_BATCH pending items tried least
+ * recently (`lastMatchAttemptAt`), so items that never match (drugs that slip
+ * the food filter, notices with no enforcement twin) can't hold the front of
+ * the queue for their whole 180-day life while newer items wait.
+ *
+ * Bounded reads: each item matches only within its own ±MATCH_WINDOW_DAYS
+ * range. The batch is swept in publishedAt order, starting at the least
+ * recently tried item and wrapping around to the older ones, so the windows
+ * advance monotonically and each recall in their union is read once (twice at
+ * most across the wrap). The sweep stops when SCAN_BUDGET recall docs have
+ * been read (Convex's 16 MiB read limit — recall docs carry multi-KB `raw`
+ * blobs). Starting at the queue head guarantees it is tried; items left over
+ * keep their old `lastMatchAttemptAt`, so they lead the next run.
  */
 export const relinkUnmatched = internalMutation({
-  args: { now: v.optional(v.number()) },
-  handler: async (ctx, args): Promise<{ relinked: number }> => {
+  // scanBudget: tests only — exercises the early stop without 2,500 fixtures.
+  args: { now: v.optional(v.number()), scanBudget: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<{ relinked: number; attempted: number }> => {
     const now = args.now ?? Date.now();
     const cutoff = new Date(now - RELINK_WINDOW_DAYS * DAY_MS).toISOString().slice(0, 10);
     const all = await ctx.db.query("pressItems").collect();
-    const pending = all
+    const batch = all
       .filter(
         (item) =>
           item.relevant &&
@@ -183,42 +253,73 @@ export const relinkUnmatched = internalMutation({
           item.matchedRecallIds.length === 0 &&
           item.publishedAt >= cutoff,
       )
-      .slice(0, RELINK_BATCH);
-    if (pending.length === 0) return { relinked: 0 };
-
-    // Every pending item's ±MATCH_WINDOW_DAYS window fits inside
-    // [oldest publishedAt − window, ∞): one indexed scan covers the batch.
-    const oldest = pending.reduce(
-      (min, item) => (item.publishedAt < min ? item.publishedAt : min),
-      pending[0]!.publishedAt,
-    );
-    const candidates = await ctx.db
-      .query("recalls")
-      .withIndex("by_recall_date", (q) =>
-        q.gte("recallDate", isoDaysFrom(oldest, -MATCH_WINDOW_DAYS)),
+      // Least recently tried first; among equals, newest press date first
+      // (likeliest to have just gained its enforcement record).
+      .sort(
+        (a, b) =>
+          a.lastMatchAttemptAt - b.lastMatchAttemptAt ||
+          b.publishedAt.localeCompare(a.publishedAt),
       )
-      .take(600);
-    const fdaCandidates = candidates.filter((recall) => recall.source === "fda");
+      .slice(0, RELINK_BATCH);
+    if (batch.length === 0) return { relinked: 0, attempted: 0 };
 
+    const head = batch[0]!.publishedAt;
+    const byDate = [...batch].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+    const sweep = [
+      ...byDate.filter((item) => item.publishedAt >= head),
+      ...byDate.filter((item) => item.publishedAt < head),
+    ];
+
+    let budget = args.scanBudget ?? SCAN_BUDGET;
+    let prevStart: string | null = null;
+    let scannedThrough: string | null = null; // end of the last range read
+    let window: Doc<"recalls">[] = []; // fda recalls read so far, ascending
+    let attempted = 0;
     let relinked = 0;
-    for (const item of pending) {
-      const windowStart = isoDaysFrom(item.publishedAt, -MATCH_WINDOW_DAYS);
-      const windowEnd = isoDaysFrom(item.publishedAt, MATCH_WINDOW_DAYS);
-      const matches = fdaCandidates.filter(
-        (recall) =>
-          recall.recallDate >= windowStart &&
-          recall.recallDate <= windowEnd &&
-          firmsLikelySame(item.companyName, recall.firm),
-      );
+    for (const item of sweep) {
+      const range = matchWindow(item.publishedAt);
+      if (prevStart !== null && range.start < prevStart) {
+        // Wrapped around to the older items: start a fresh sweep.
+        scannedThrough = null;
+        window = [];
+      }
+      prevStart = range.start;
+      if (scannedThrough === null || range.end > scannedThrough) {
+        // Overlaps the last range read: only read past its end.
+        const after =
+          scannedThrough !== null && scannedThrough >= range.start ? scannedThrough : null;
+        const { docs, truncated } = await scanRecalls(
+          ctx,
+          { start: range.start, after, end: range.end },
+          budget,
+        );
+        if (truncated && attempted > 0) break; // the rest lead the next run
+        if (truncated) {
+          // A single window denser than the whole budget: match within what
+          // fit rather than never trying this item. Not seen in real data.
+          console.warn(
+            `[press] relink window ${range.start}..${range.end} holds more than ${budget} recalls; matched within the first ${budget}`,
+          );
+        }
+        budget -= docs.length;
+        window = window
+          .filter((recall) => recall.recallDate >= range.start)
+          .concat(docs.filter((recall) => recall.source === "fda"));
+        scannedThrough = range.end;
+      }
+
+      const matches = window.filter((recall) => isTwin(recall, item.companyName, range));
       for (const recall of matches) {
-        await applyToRecall(ctx, recall, item, now);
+        const patched = await applyToRecall(ctx, recall, item, now);
+        window[window.indexOf(recall)] = patched;
       }
       await ctx.db.patch(item._id, {
         matchedRecallIds: matches.map((m) => m._id),
         lastMatchAttemptAt: now,
       });
+      attempted++;
       if (matches.length > 0) relinked++;
     }
-    return { relinked };
+    return { relinked, attempted };
   },
 });
