@@ -253,6 +253,10 @@ sourceHealth: {                    // one record per source; see §10
   lastNewRecordAt?: number,
   consecutiveFailures: number,
   lastError?: string,
+  directLastSuccessAt?: number,    // two-transport sources (fda_rss): Convex's own fetch
+  relayLastSuccessAt?: number,     //   and the off-Convex relay (T5, 2026-11). A failure on
+                                   //   one transport isn't counted while the other succeeded
+                                   //   within the delayed threshold (2x polling interval).
 }
 
 households: {
