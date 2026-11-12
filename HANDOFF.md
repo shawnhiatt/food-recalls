@@ -2,6 +2,14 @@
 
 Where the last session stopped. Newest entry first.
 
+## 2026-11-12: FDA press relay (T2 + T5)
+
+`fda_rss` is **current on prod again** (it had been unavailable since 2026-10-24, with 150 failures). fda.gov denies Convex's egress, so a launchd agent on Shawn's Mac (`app.foodrecalls.fda-relay`, every 3h) fetches the feed and new press pages and POSTs them to the new Convex HTTP action `/relay/fda-rss` (shared secret `FDA_RELAY_SECRET`, set on prod Convex and in the Mac's login Keychain). Convex's own fetch still runs. `sourceHealth` now tracks per-transport success, and a failure on one transport isn't counted while the other is current. See `docs/fda-relay.md` for install, uninstall and rotation.
+
+- T2: the Vercel probe was deployed as a Preview, but its result wasn't read (Vercel SSO), and Hobby crons are daily only. The probe branch was deleted. If Vercel matters later, re-probe, then have a route call `runRelay` with a Convex cron driving it.
+- Backfill: 11 press items from 2026-10-24 through 11-10 recorded (press items 139 → 150, newest 10-22 → 11-10). 23 recall links, but **22 are false positives** from the existing matching heuristic (21 Taylor Farms de Mexico lettuce recalls, plus M.G. Foods' burrito). See TODO "Press↔recall matching false positives". Most new items will match only when openFDA publishes their records (prod's newest recallDate is 2026-10-09).
+- Dev `intent-donkey-676` runs this branch and has its own random `FDA_RELAY_SECRET`.
+
 ## 2026-11-12: iOS redesign in Figma (iOS redesign session)
 
 New Figma file: https://www.figma.com/design/wh0GKJHOwveL6RmZp8nL2v ("Food Recalls iOS", SH team drafts). This is an iPhone-first native redesign driven by the UX audit, in light and dark. Pages: Cover, Foundations (Light/Dark color variables over hidden primitives, a quarantined severity set with computed contrast, SF Pro / Dynamic Type styles at default and AX3, spacing, radius, SF Symbols, and 11 SPEC §12 divergences), Components (~30 sets: recall and outbreak cards in two match tiers, household status card in 3 states, sources, scanner verdicts, plus stand-ins for the iOS chrome), Screens (53 frames: sign-in, onboarding, Feed states, sheets, detail, Kitchen/scanner, Saved, Household, Search, system states), Native extras (widgets, Lock Screen, APNs previews with redaction rules, share sheet, Control Center), and Decisions (20 decisions tied to UX-NN, 9 open questions, the backend changes the design needs). Gotchas: the Figma MCP renderer can't measure SF Pro, so type is drawn in Inter through named styles. The SF Symbols are real outlines exported with CoreText. The Apple iOS 26 kit refuses import until its EULA is accepted. Next: Shawn answers the open questions, then the iOS spec (`SPEC-IOS.md`).

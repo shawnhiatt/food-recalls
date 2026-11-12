@@ -16,6 +16,9 @@
 // Exit code 0 when the feed was relayed (even if a page failed and will be
 // retried next run), 1 when the feed couldn't be read or Convex refused.
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 export const RSS_URL =
   "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml";
 // The app's own User-Agent, as Convex's fetch sends. No header tricks.
@@ -106,8 +109,16 @@ export async function runRelay({
   };
 }
 
-// CLI entry (not when imported).
-if (import.meta.url === `file://${process.argv[1]}`) {
+// CLI entry (not when imported). Compare real paths: the installed copy lives
+// under "Application Support", and import.meta.url percent-encodes the space.
+const isCli = (() => {
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1] ?? "");
+  } catch {
+    return false;
+  }
+})();
+if (isCli) {
   runRelay({
     relayUrl: process.env.FDA_RELAY_URL ?? "",
     secret: process.env.FDA_RELAY_SECRET ?? "",

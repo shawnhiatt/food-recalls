@@ -76,7 +76,7 @@ PLIST
     echo "Installed $LABEL (every ${INTERVAL_SECONDS}s, and once now). Log: $LOG"
     ;;
   run)
-    [ -x "$HOME_DIR/run.sh" ] || write_runner
+    write_runner # refresh the copy, so a run always uses the repo's relay
     /bin/bash "$HOME_DIR/run.sh"
     ;;
   status)

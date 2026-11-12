@@ -40,6 +40,15 @@ urgency, not spec order.
       so the source recovers by itself if fda.gov unblocks. Interim until email
       ingest (T7). The relay runs on Shawn's Mac, so fda_rss goes delayed when the
       Mac sleeps for 6h or more. That's honest, but it is a known gap.
+- [ ] **Press↔recall matching false positives (found in the T5 backfill, 2026-11-12).**
+      `firmsLikelySame` + the ±120-day window linked a 2026-10-27 Taylor Farms
+      release (H-E-B BBQ chop salad kit, soy/tree nut) to 21 unrelated 2026-07-17
+      Taylor Farms de Mexico lettuce recalls, and the Fresh & Ready / Snack Right
+      "… Foods" releases to M.G. Foods' 2026-07-18 burrito (normalizes to `foods`).
+      Those 22 prod recalls now show the wrong photo and notice link, and the
+      burrito picked up wrong risk groups. Fix the heuristic first (e.g. tighter
+      date proximity, reject one-token normalized firms, product/brand overlap),
+      then repair the 22 recalls and unlink the press items, with tests.
 
 - [ ] **FSIS and CDC are permanently blocked upstream** (HTTP 403, TLS-fingerprint
       bot detection — verified on both dev and prod). Two real options: (a) a
