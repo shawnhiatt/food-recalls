@@ -108,8 +108,9 @@ export const ingest = internalAction({
     // records lag press releases). Needs no network.
     let relinked = 0;
     try {
-      ({ relinked } = await ctx.runMutation(internal.press.relinkUnmatched, {}));
-      console.log(`[fda_rss:relink] relinked ${relinked}`);
+      const relink = await ctx.runMutation(internal.press.relinkUnmatched, {});
+      relinked = relink.relinked;
+      console.log(`[fda_rss:relink] relinked ${relinked} of ${relink.attempted} tried`);
     } catch (error) {
       fail("relink", error);
     }
