@@ -10,6 +10,9 @@ import {
   type NotificationPreset,
 } from "@/lib/copy";
 import { US_STATES, STATE_NAME } from "@/lib/states";
+// Pure, dependency-free module: the one §11 Step-5 recap generator, shared
+// with convex/household.ts so onboarding and the Household tab always agree.
+import { buildHouseholdSummary } from "@/convex/lib/summary";
 
 // §11 onboarding questionnaire, reused for first-run (/onboarding) and "Redo
 // setup" (Household tab). Five steps; Step 1 (location) is the only required
@@ -428,7 +431,7 @@ function StepAllergens({ answers, patch }: StepProps) {
               type="button"
               aria-pressed={on}
               onClick={() => patch({ allergens: on ? answers.allergens.filter((x) => x !== a) : [...answers.allergens, a] })}
-              className="rounded-full px-3 py-1.5 text-sm font-medium capitalize"
+              className="rounded-full px-3 py-1.5 text-sm font-medium"
               style={{ background: on ? "var(--color-primary)" : "var(--color-secondary)", color: on ? "#fff" : "var(--color-foreground)" }}
             >
               {formatAllergenLabel(a)}
@@ -465,7 +468,6 @@ function StepAlerts({ answers, patch }: StepProps) {
             >
               <span className="text-sm font-bold" style={{ color: "var(--color-foreground)" }}>
                 {PRESET_LABEL[preset]}
-                {preset === "recommended" && " · Recommended"}
               </span>
               <span className="mt-0.5 block text-xs" style={{ color: "var(--color-muted-foreground)" }}>
                 {PRESET_HELP[preset]}
@@ -479,17 +481,19 @@ function StepAlerts({ answers, patch }: StepProps) {
 }
 
 function StepReview({ answers }: { answers: WizardAnswers }) {
-  const recap = useMemo(() => {
-    const parts: string[] = [];
-    if (answers.location.states.length) parts.push(`Recalls in ${answers.location.states.join(", ")}`);
-    if (answers.allergens.length) parts.push(`${answers.allergens.map(formatAllergenLabel).join(" & ")} allergens`);
-    const counts = new Map<AgeBand, number>();
-    answers.people.members.forEach((m) => counts.set(m.ageBand, (counts.get(m.ageBand) ?? 0) + 1));
-    counts.forEach((n, band) => parts.push(`${n} ${AGE_BAND_LABEL[band].toLowerCase()}${n > 1 ? "s" : ""}`));
-    if (answers.people.pets.length) parts.push(answers.people.pets.join(" & "));
-    parts.push(PRESET_LABEL[answers.notifications.preset]);
-    return parts.join(" · ");
-  }, [answers]);
+  // §11: the same generator as the Household tab's recap, so the two can
+  // never disagree (UX-11: "1 65+ adult" vs "1 adult 65+").
+  const recap = useMemo(
+    () =>
+      buildHouseholdSummary({
+        states: answers.location.states,
+        allergens: answers.allergens,
+        pets: answers.people.pets,
+        members: answers.people.members,
+        preset: answers.notifications.preset,
+      }),
+    [answers],
+  );
 
   return (
     <section>

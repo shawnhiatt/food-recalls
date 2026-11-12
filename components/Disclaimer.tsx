@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 
 // Disclaimers (SPEC.md §12): "footer + first-run: data from openFDA/FSIS/CDC,
-// unvalidated, not an official alerting service."
+// unvalidated, not an official alerting service." Names every source the app
+// ingests, FDA press releases included, in plain words (UX-11).
 
 const FIRST_RUN_KEY = "food-recalls:first-run-ack";
 
 const DISCLAIMER_TEXT =
-  "Data comes from openFDA, USDA FSIS, and CDC. openFDA states its data is " +
-  "unvalidated; this app is not an official alerting service. Always verify " +
-  "against the linked official notice.";
+  "Data comes from FDA recall records and press releases, USDA's Food Safety " +
+  "and Inspection Service, and CDC. FDA says its recall data is unvalidated, " +
+  "and this app is not an official alerting service. Always check the linked " +
+  "official notice.";
 
 /**
  * One-time first-run disclosure, shown until acknowledged. Renders nothing

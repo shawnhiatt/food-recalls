@@ -60,14 +60,14 @@ export function HouseholdView() {
         <p className="mb-2 text-xs" style={{ color: "var(--color-muted-foreground)" }}>
           We&apos;ll flag recalls whose notice mentions one of these — always labeled
           &ldquo;possible match,&rdquo; since government data doesn&apos;t confirm specific
-          stores (Phase 6, §7).
+          stores.
         </p>
         <StringListEditor label="Stores" values={summary.chains} onSave={(chains) => ({ chains })} />
       </Section>
 
       {summary.allergens.length > 0 && (
         <Section title="Allergens">
-          <ChipList items={summary.allergens.map(formatAllergenLabel)} />
+          <ChipList items={summary.allergens.map((a) => formatAllergenLabel(a))} />
         </Section>
       )}
 
@@ -424,7 +424,7 @@ function ChipList({ items }: { items: string[] }) {
       {items.map((item) => (
         <li
           key={item}
-          className="rounded-full px-2.5 py-1 text-xs font-medium capitalize"
+          className="rounded-full px-2.5 py-1 text-xs font-medium"
           style={{ background: "var(--color-secondary)", color: "var(--color-foreground)" }}
         >
           {item}

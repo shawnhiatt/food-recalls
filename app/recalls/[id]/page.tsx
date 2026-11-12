@@ -11,7 +11,7 @@ import { RecallDetail } from "@/components/RecallDetail";
 export const metadata: Metadata = {
   title: "Recall details — Food Recalls",
   description:
-    "Recall risk level, affected states, allergens, and update timeline. Data from openFDA/FSIS.",
+    "Recall risk level, affected states, allergens, and update timeline. Data from FDA and USDA.",
 };
 
 export default function RecallDetailPage() {

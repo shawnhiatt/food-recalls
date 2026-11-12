@@ -20,11 +20,13 @@ const PRESET_LABELS: Record<SummaryInput["preset"], string> = {
   digest_only: "Digest only",
 };
 
-const AGE_BAND_LABELS: Record<SummaryInput["members"][number]["ageBand"], string> = {
-  infant: "infant",
-  child: "kid",
-  adult: "adult",
-  older_adult: "65+ adult",
+// [singular, plural]. "adult 65+" matches the band's label everywhere else
+// ("Adult 65+"), and pluralizes the noun, not the "65+" (UX-11).
+const AGE_BAND_NOUNS: Record<SummaryInput["members"][number]["ageBand"], [string, string]> = {
+  infant: ["infant", "infants"],
+  child: ["kid", "kids"],
+  adult: ["adult", "adults"],
+  older_adult: ["adult 65+", "adults 65+"],
 };
 
 function countNoun(count: number, noun: string): string {
@@ -58,12 +60,14 @@ export function buildHouseholdSummary(input: SummaryInput): string {
     parts.push(`${joined} allergen${names.length === 1 ? "" : "s"}`);
   }
 
-  const bandCounts = new Map<string, number>();
+  const bandCounts = new Map<SummaryInput["members"][number]["ageBand"], number>();
   for (const member of input.members) {
-    const label = AGE_BAND_LABELS[member.ageBand];
-    bandCounts.set(label, (bandCounts.get(label) ?? 0) + 1);
+    bandCounts.set(member.ageBand, (bandCounts.get(member.ageBand) ?? 0) + 1);
   }
-  for (const [label, count] of bandCounts) parts.push(countNoun(count, label));
+  for (const [band, count] of bandCounts) {
+    const [one, many] = AGE_BAND_NOUNS[band];
+    parts.push(`${count} ${count === 1 ? one : many}`);
+  }
 
   const petCounts = new Map<string, number>();
   for (const pet of input.pets) petCounts.set(pet, (petCounts.get(pet) ?? 0) + 1);

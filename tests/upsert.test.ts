@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import { normalizeBatch, type NormalizedRecall } from "../convex/adapters/types";
 import { normalizeOpenFdaRecord } from "../convex/adapters/openfda";
+import { diffSummary } from "../convex/recalls";
 import { setupConvex } from "./helpers";
 import page from "./fixtures/openfda/enforcement-page.json";
 
@@ -86,7 +87,7 @@ describe("upsertBatch revisioning (SPEC.md §4, §14 hash stability)", () => {
     const update = doc!.updateHistory[1]!;
     expect(update.label).toBe("Update 1");
     expect(update.summary).toContain("States added: TX");
-    expect(update.summary).toContain("classification changed from Class II to Class I");
+    expect(update.summary).toContain("risk level changed from moderate to high");
     expect(update.contentHash).toBe(result.record.contentHash);
 
     // Same revision again: only a touch, no third entry (per-revision idempotence).
@@ -175,5 +176,23 @@ describe("upsertBatch revisioning (SPEC.md §4, §14 hash stability)", () => {
     await t.mutation(internal.recalls.upsertBatch, { records: normalizedFixture() });
     expect(await t.query(internal.recalls.hasAnyFromSource, { source: "fda" })).toBe(true);
     expect(await t.query(internal.recalls.hasAnyFromSource, { source: "fsis" })).toBe(false);
+  });
+});
+
+// UX-11: timeline summaries are §11 plain language, and a source-side date
+// correction is said out loud rather than silently moving the card's date.
+describe("diffSummary wording", () => {
+  const base = () => normalizedFixture()[0]!;
+
+  test("risk level changes use §11 words, including Not Yet Classified", () => {
+    const prev = { ...base(), classification: "Class II" };
+    const next = { ...base(), classification: "Not Yet Classified" };
+    expect(diffSummary(prev, next)).toBe("Risk level changed from moderate to not yet rated");
+  });
+
+  test("a corrected recall date is named", () => {
+    const prev = { ...base(), recallDate: "2016-06-10" };
+    const next = { ...base(), recallDate: "2026-06-10" };
+    expect(diffSummary(prev, next)).toBe("Recall date changed from 2016-06-10 to 2026-06-10");
   });
 });

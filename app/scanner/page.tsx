@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { formatRelativeTime } from "@/lib/format";
-import { archivedRecallExplanation, NO_KNOWN_RECALL_COPY, sameManufacturerExplanation } from "@/lib/copy";
+import { archivedRecallExplanation, firmNames, NO_KNOWN_RECALL_COPY, sameManufacturerExplanation } from "@/lib/copy";
 
 // Scanner tab (SPEC.md §12, Phase 7): camera UPC scan (in-store check +
 // pantry audit) with always-available manual entry, scan-to-pantry
@@ -253,7 +253,7 @@ function ScanOutcomeCard({ outcome }: { outcome: ScanOutcome }) {
           {outcome.productName ?? outcome.brand ?? "This barcode"}
         </p>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-          {sameManufacturerExplanation(outcome.matchedRecalls.map((r) => r.firm))}
+          {sameManufacturerExplanation(outcome.matchedRecalls.map((r) => firmNames(r.firm)[0]!))}
         </p>
         <RecallLinks recalls={outcome.matchedRecalls} />
       </div>

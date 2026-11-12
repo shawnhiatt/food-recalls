@@ -594,8 +594,9 @@ double-checking") + deep link.
 all-clear copy with last-checked timestamp when sources are Current; explicit
 incompleteness copy when degraded.
 
-**Disclaimers:** footer + first-run: data from openFDA/FSIS/CDC, unvalidated, not an
-official alerting service.
+**Disclaimers:** footer + first-run: data from FDA recall records and press releases, USDA
+FSIS and CDC (in plain names; no "openFDA" in UI copy), unvalidated, not an official
+alerting service. The detail-page footer names only the sources that recall came from.
 
 ## 13. Phased build plan
 

@@ -22,9 +22,24 @@ const CLOSED_LIFECYCLES = new Set([
   "corrected",
 ]);
 
+/** §11 wording for a raw classification inside a sentence: never bare "Class II". */
+function riskPhrase(classification: string): string {
+  const c = classification.trim().toLowerCase();
+  if (/\bclass\s*iii\b/.test(c)) return "low";
+  if (/\bclass\s*ii\b/.test(c)) return "moderate";
+  if (/\bclass\s*i\b/.test(c)) return "high";
+  return "not yet rated";
+}
+
 /** Human summary of what changed between revisions — powers the Timeline view. */
 export function diffSummary(prev: NormalizedRecall, next: NormalizedRecall): string {
   const changes: string[] = [];
+
+  // Sources do correct dates in place (seen on openFDA: 2016 → 2026). The
+  // first timeline entry keeps the original, so say so (UX-11).
+  if (prev.recallDate !== next.recallDate) {
+    changes.push(`recall date changed from ${prev.recallDate} to ${next.recallDate}`);
+  }
 
   const prevStates = new Set(prev.states);
   const nextStates = new Set(next.states);
@@ -35,7 +50,7 @@ export function diffSummary(prev: NormalizedRecall, next: NormalizedRecall): str
 
   if (prev.classification !== next.classification) {
     changes.push(
-      `classification changed from ${prev.classification || "unset"} to ${next.classification || "unset"}`,
+      `risk level changed from ${riskPhrase(prev.classification)} to ${riskPhrase(next.classification)}`,
     );
   }
   if (prev.lifecycle !== next.lifecycle) {

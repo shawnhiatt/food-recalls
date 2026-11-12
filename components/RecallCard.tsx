@@ -4,7 +4,7 @@ import { RecallImage } from "@/components/RecallImage";
 import { RiskLevelBadge } from "@/components/RiskLevelBadge";
 import { ReasonChips } from "@/components/ReasonChips";
 import { formatDate, formatGeography } from "@/lib/format";
-import { HAZARD_TYPE_LABEL, type HazardType, type MatchDimension } from "@/lib/copy";
+import { firmNames, HAZARD_TYPE_LABEL, type HazardType, type MatchDimension } from "@/lib/copy";
 
 // Card anatomy (SPEC.md §12), scoped to what Phase 1 data actually has:
 // product photo/placeholder, date, geography badge, product name, company,
@@ -70,7 +70,7 @@ export function RecallCard({
           {recall.productDesc}
         </h3>
         <p className="truncate text-xs" style={{ color: "var(--color-muted-foreground)" }}>
-          {recall.firm}
+          {firmNames(recall.firm)[0]}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <RiskLevelBadge classification={recall.classification} lifecycle={recall.lifecycle} />

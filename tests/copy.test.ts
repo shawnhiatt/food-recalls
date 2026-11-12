@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { classifyRiskLevel, coverageGapLines, formatAllergenLabel } from "../lib/copy";
+import {
+  classifyRiskLevel,
+  coverageGapLines,
+  firmNames,
+  formatAllergenLabel,
+  plainTimelineSummary,
+  reasonChipLabel,
+  recallSourceAttribution,
+} from "../lib/copy";
 
 // Plain-language copy rules (SPEC.md §11) — classification is raw agency
 // wording ("Class I" / "II" / "III"); guards against the "Class I" substring
@@ -30,8 +38,8 @@ describe("classifyRiskLevel", () => {
 
 describe("formatAllergenLabel", () => {
   test("replaces underscores with spaces", () => {
-    expect(formatAllergenLabel("crustacean_shellfish")).toBe("crustacean shellfish");
-    expect(formatAllergenLabel("milk")).toBe("milk");
+    expect(formatAllergenLabel("crustacean_shellfish", { inline: true })).toBe("crustacean shellfish");
+    expect(formatAllergenLabel("milk", { inline: true })).toBe("milk");
   });
 });
 
@@ -84,5 +92,44 @@ describe("coverageGapLines", () => {
     expect(
       coverageGapLines([{ source: "fsis", state: "delayed", lastSuccessAt: now - 5 * 3_600_000 }], now),
     ).toEqual(["USDA meat & poultry: no updates since earlier today."]);
+  });
+});
+
+// UX-11: one formatter per concept, §11 wording for stored agency text.
+describe("UX-11 copy formatters", () => {
+  test("allergens are sentence case standalone, lowercase inline", () => {
+    expect(formatAllergenLabel("crustacean_shellfish")).toBe("Crustacean shellfish");
+    expect(formatAllergenLabel("Milk")).toBe("Milk");
+    expect(reasonChipLabel("allergen", ["milk", "tree_nuts"])).toBe("Allergen: milk, tree nuts");
+  });
+
+  test("firm strings split on semicolons", () => {
+    expect(firmNames("Chicken of the Sea; Thai Union")).toEqual(["Chicken of the Sea", "Thai Union"]);
+    expect(firmNames("Acme Foods")).toEqual(["Acme Foods"]);
+    expect(firmNames("Enjoy Nutrition, LLC; dba Weyland Brain Nutrition")).toEqual([
+      "Enjoy Nutrition, LLC dba Weyland Brain Nutrition",
+    ]);
+  });
+
+  test("stored timeline summaries lose bare agency jargon", () => {
+    expect(plainTimelineSummary("Classification changed from Class II to Not Yet Classified")).toBe(
+      "Risk level changed from moderate to not yet rated",
+    );
+    expect(plainTimelineSummary("States added: TX; classification changed from Class II to Class I")).toBe(
+      "States added: TX; risk level changed from moderate to high",
+    );
+    expect(plainTimelineSummary("Initial notice")).toBe("Initial notice");
+  });
+
+  test("detail attribution names the real source", () => {
+    expect(recallSourceAttribution({ source: "fsis", sourceUrl: "https://www.fsis.usda.gov/x" })).toBe(
+      "USDA's Food Safety and Inspection Service",
+    );
+    expect(recallSourceAttribution({ source: "fda", sourceUrl: "https://api.fda.gov/food/enforcement.json?x" })).toBe(
+      "FDA recall records",
+    );
+    expect(recallSourceAttribution({ source: "fda", sourceUrl: "https://www.fda.gov/safety/recalls/x" })).toBe(
+      "FDA recall records and an FDA press release",
+    );
   });
 });

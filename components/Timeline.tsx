@@ -1,4 +1,5 @@
 import { formatDate } from "@/lib/format";
+import { plainTimelineSummary } from "@/lib/copy";
 
 type UpdateHistoryEntry = {
   date: string;
@@ -8,13 +9,25 @@ type UpdateHistoryEntry = {
 };
 
 // Vertical timeline (SPEC.md §12): Recall → Update 1 → Update 2, rendered
-// straight from updateHistory.
-export function Timeline({ entries }: { entries: UpdateHistoryEntry[] }) {
+// straight from updateHistory. Summaries go through §11 wording at render time
+// (stored ones predate it). The first entry froze the recall date at first
+// ingest; when the source later corrects that date (seen on openFDA: 2016 →
+// 2026), show the current date, the one the card shows, and say what it was.
+export function Timeline({ entries, recallDate }: { entries: UpdateHistoryEntry[]; recallDate?: string }) {
+  const rows = entries.map((entry, i) =>
+    i === 0 && recallDate && entry.date !== recallDate
+      ? {
+          ...entry,
+          date: recallDate,
+          summary: `${entry.summary}. The source first listed the recall date as ${formatDate(entry.date)}.`,
+        }
+      : entry,
+  );
   return (
     <ol className="relative">
-      {entries.map((entry, i) => (
+      {rows.map((entry, i) => (
         <li key={entry.contentHash + i} className="relative flex gap-3 pb-6 last:pb-0">
-          {i < entries.length - 1 && (
+          {i < rows.length - 1 && (
             <span
               className="absolute left-[7px] top-4 bottom-0 w-px"
               style={{ background: "var(--color-border)" }}
@@ -36,7 +49,7 @@ export function Timeline({ entries }: { entries: UpdateHistoryEntry[] }) {
               </span>
             </div>
             <p className="mt-0.5 text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-              {entry.summary}
+              {plainTimelineSummary(entry.summary)}
             </p>
           </div>
         </li>

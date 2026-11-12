@@ -18,6 +18,8 @@ import {
   RISK_LEVEL_DESCRIPTION,
   formatAllergenLabel,
   chainMatchExplanation,
+  firmNames,
+  recallSourceAttribution,
   type RiskGroup,
 } from "@/lib/copy";
 
@@ -82,7 +84,7 @@ export function RecallDetail() {
           </div>
         </div>
         <p className="text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-          Company: {recall.firm}
+          Company: {firmNames(recall.firm).join(", ")}
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -133,7 +135,7 @@ export function RecallDetail() {
               {recall.allergens.map((allergen) => (
                 <li
                   key={allergen}
-                  className="rounded-full px-2.5 py-1 text-xs font-medium capitalize"
+                  className="rounded-full px-2.5 py-1 text-xs font-medium"
                   style={{ background: "var(--color-secondary)", color: "var(--color-foreground)" }}
                 >
                   {formatAllergenLabel(allergen)}
@@ -166,7 +168,7 @@ export function RecallDetail() {
         )}
 
         <Section title="Timeline">
-          <Timeline entries={recall.updateHistory} />
+          <Timeline entries={recall.updateHistory} recallDate={recall.recallDate} />
         </Section>
 
         <a
@@ -179,8 +181,8 @@ export function RecallDetail() {
           View official source
         </a>
         <p className="mt-3 text-center text-xs" style={{ color: "var(--color-muted-foreground)" }}>
-          Data from openFDA/FSIS, unvalidated. Not an official alerting service — always verify
-          against the linked notice.
+          Data from {recallSourceAttribution(recall)}, unvalidated. Not an official alerting
+          service. Always check the linked notice.
         </p>
       </div>
     </main>
