@@ -41,6 +41,7 @@ npm run dev:web     # Next.js on :3000 (.claude/launch.json "web")
 ## Design
 
 - Figma baseline of the current PWA (2026-11-11): https://www.figma.com/design/XyJxXlBeqLsJFmPeoC68Qm. Pages: Foundations (SPEC §12 tokens as variables, the Public Sans ramp as used, code-vs-SPEC divergences), Baseline (60 frames at 390 and 320, grouped by flow), Annotations (observations for the UX audit). It shows what shipped. Don't edit it to match a redesign; put the redesign in a new file or new pages.
+- Figma iOS redesign (2026-11-12): https://www.figma.com/design/wh0GKJHOwveL6RmZp8nL2v ("Food Recalls iOS"). Pages: Cover, Foundations (Light/Dark variables, severity quarantine, SF Pro / Dynamic Type styles, SF Symbols, SPEC §12 divergences), Components, Screens (53 frames, light and dark), Native extras (widgets, notifications, share sheet), Decisions (decisions tied to UX-NN, open questions, backend implications). Text is drawn in Inter as an SF Pro stand-in, because the MCP renderer can't measure SF Pro.
 - Dev test accounts used for captures are listed at the bottom of `.env.example`.
 
 ## Known upstream blocks
