@@ -2,6 +2,10 @@
 
 Where the last session stopped. Newest entry first.
 
+## 2026-11-12: iOS redesign in Figma (iOS redesign session)
+
+New Figma file: https://www.figma.com/design/wh0GKJHOwveL6RmZp8nL2v ("Food Recalls iOS", SH team drafts). This is an iPhone-first native redesign driven by the UX audit, in light and dark. Pages: Cover, Foundations (Light/Dark color variables over hidden primitives, a quarantined severity set with computed contrast, SF Pro / Dynamic Type styles at default and AX3, spacing, radius, SF Symbols, and 11 SPEC §12 divergences), Components (~30 sets: recall and outbreak cards in two match tiers, household status card in 3 states, sources, scanner verdicts, plus stand-ins for the iOS chrome), Screens (53 frames: sign-in, onboarding, Feed states, sheets, detail, Kitchen/scanner, Saved, Household, Search, system states), Native extras (widgets, Lock Screen, APNs previews with redaction rules, share sheet, Control Center), and Decisions (20 decisions tied to UX-NN, 9 open questions, the backend changes the design needs). Gotchas: the Figma MCP renderer can't measure SF Pro, so type is drawn in Inter through named styles. The SF Symbols are real outlines exported with CoreText. The Apple iOS 26 kit refuses import until its EULA is accepted. Next: Shawn answers the open questions, then the iOS spec (`SPEC-IOS.md`).
+
 ## 2026-11-11: Figma baseline of the PWA (Figma baseline session)
 
 New Figma file: https://www.figma.com/design/XyJxXlBeqLsJFmPeoC68Qm ("Food Recalls — PWA baseline (2026-11)", SH team drafts). It has three pages: Foundations (34 variables plus 17 Public Sans text styles), Baseline (60 editable frames from the running app on dev `intent-donkey-676`, plus 4 read-only prod frames), and Annotations (34 observations for the UX audit). The test accounts are in `.env.example`. Dev now holds a "Baseline test household" with bookmarks, pantry scans and a pending invite. Prod was only viewed. Next: the UX and visual audit.
