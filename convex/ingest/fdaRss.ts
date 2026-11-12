@@ -22,7 +22,7 @@ const OFF_URL = "https://world.openfoodfacts.org/api/v2/product";
 
 // Polite pacing: the feed adds a handful of items per week, so small per-run
 // caps clear any backlog within a day of cron runs without hammering anyone.
-const MAX_PRESS_FETCHES_PER_RUN = 8;
+export const MAX_PRESS_FETCHES_PER_RUN = 8;
 const MAX_OFF_LOOKUPS_PER_RUN = 5;
 
 // fda.gov serves plain fetches fine (unlike FSIS) but a UA is good manners;
@@ -93,15 +93,22 @@ export const ingest = internalAction({
         outcome: "success",
         newRecords: feed.pagesFetched,
         anomaly: feed.anomaly,
+        transport: "direct",
       });
       console.log(`[fda_rss:feed] ${JSON.stringify(feed)}`);
     } catch (error) {
-      fail("feed", error);
-      await ctx.runMutation(internal.sourceHealth.reportRun, {
+      const message = error instanceof Error ? error.message : String(error);
+      const health = await ctx.runMutation(internal.sourceHealth.reportRun, {
         source: "fda_rss",
         outcome: "failure",
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
+        transport: "direct",
       });
+      // While the relay (T5) is delivering the feed, Convex's own fetch failing
+      // is expected (fda.gov denies Convex's egress) and isn't a run failure.
+      // It keeps trying so it recovers on its own if fda.gov unblocks.
+      if (health.counted) fail("feed", error);
+      else console.warn(`[fda_rss:feed] direct fetch failed, relay is current: ${message}`);
     }
 
     // Step 2: retry unmatched press items already in the DB (enforcement
@@ -151,9 +158,16 @@ type FeedResult = {
   anomaly?: boolean;
 };
 
-/** Fetch the RSS feed and the (few) new press pages it lists. Throws if the feed can't be read. */
-async function ingestFeed(ctx: ActionCtx): Promise<FeedResult> {
-  const xml = await fetchText(RSS_URL);
+/**
+ * Parse a feed body and pick the press pages still to fetch (no pressItems row
+ * yet). Shared by Convex's own fetch and the relay (convex/ingest/fdaRelay.ts),
+ * so the adapter stays the one place the feed is understood.
+ */
+export async function planFeed(
+  ctx: ActionCtx,
+  xml: string,
+  maxPages: number,
+): Promise<{ items: PressRssItem[]; toFetch: PressRssItem[]; anomaly: boolean }> {
   const items = parseRssItems(xml);
 
   // Zero items from a feed that has produced items before is a parse/feed
@@ -165,9 +179,35 @@ async function ingestFeed(ctx: ActionCtx): Promise<FeedResult> {
     guids: items.map((i) => i.guid),
   });
   const newGuidSet = new Set(newGuids);
-  const toFetch = items
-    .filter((i) => newGuidSet.has(i.guid))
-    .slice(0, MAX_PRESS_FETCHES_PER_RUN);
+  const toFetch = items.filter((i) => newGuidSet.has(i.guid)).slice(0, maxPages);
+  return { items, toFetch, anomaly };
+}
+
+/** Parse one press page and record it, enriching matching recalls. Shared with the relay. */
+export async function recordPressPage(
+  ctx: ActionCtx,
+  item: Pick<PressRssItem, "guid" | "url" | "title" | "publishedAt">,
+  html: string,
+): Promise<{ matched: number }> {
+  const press = parsePressPage(html);
+  const relevant = isFoodRelated(press.productType);
+  return await ctx.runMutation(internal.press.recordPressItem, {
+    guid: item.guid,
+    url: item.url,
+    title: item.title,
+    publishedAt: item.publishedAt,
+    companyName: press.companyName,
+    productType: press.productType,
+    relevant,
+    imageUrl: press.imageUrl,
+    riskGroups: relevant ? extractRiskGroups(press.bodyText) : [],
+  });
+}
+
+/** Fetch the RSS feed and the (few) new press pages it lists. Throws if the feed can't be read. */
+async function ingestFeed(ctx: ActionCtx): Promise<FeedResult> {
+  const xml = await fetchText(RSS_URL);
+  const { items, toFetch, anomaly } = await planFeed(ctx, xml, MAX_PRESS_FETCHES_PER_RUN);
 
   let pagesFetched = 0;
   let recallsEnriched = 0;
@@ -209,19 +249,7 @@ async function ingestPressItem(
 ): Promise<{ matched: number } | null> {
   try {
     const html = await fetchText(item.url);
-    const press = parsePressPage(html);
-    const relevant = isFoodRelated(press.productType);
-    return await ctx.runMutation(internal.press.recordPressItem, {
-      guid: item.guid,
-      url: item.url,
-      title: item.title,
-      publishedAt: item.publishedAt,
-      companyName: press.companyName,
-      productType: press.productType,
-      relevant,
-      imageUrl: press.imageUrl,
-      riskGroups: relevant ? extractRiskGroups(press.bodyText) : [],
-    });
+    return await recordPressPage(ctx, item, html);
   } catch (error) {
     console.warn(
       `[fda_rss] press page failed, will retry next run: ${item.url} — ` +

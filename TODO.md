@@ -33,6 +33,14 @@ urgency, not spec order.
 
 ## Data-source reliability
 
+- [ ] **FDA press feed via a relay (T5, 2026-11).** www.fda.gov's Akamai denies
+      Convex's egress (HTTP 401 since 2026-10-24). A relay off Convex fetches the
+      feed and press pages and POSTs them to `/relay/fda-rss`
+      ([docs/fda-relay.md](docs/fda-relay.md)). Convex's own fetch keeps running
+      so the source recovers by itself if fda.gov unblocks. Interim until email
+      ingest (T7). The relay runs on Shawn's Mac, so fda_rss goes delayed when the
+      Mac sleeps for 6h or more. That's honest, but it is a known gap.
+
 - [ ] **FSIS and CDC are permanently blocked upstream** (HTTP 403, TLS-fingerprint
       bot detection — verified on both dev and prod). Two real options: (a) a
       browser-fingerprint-capable proxy in front of the fetch, or (b) ask each

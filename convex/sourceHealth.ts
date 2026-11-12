@@ -54,6 +54,9 @@ const sourceValidator = v.union(
   v.literal("cdc"),
 );
 
+export type Transport = "direct" | "relay";
+const transportValidator = v.union(v.literal("direct"), v.literal("relay"));
+
 export const reportRun = internalMutation({
   args: {
     source: sourceValidator,
@@ -63,6 +66,9 @@ export const reportRun = internalMutation({
     // True when the run "succeeded" suspiciously, e.g. a parse returned zero
     // records where records previously existed (§10, §15 scraper fragility).
     anomaly: v.optional(v.boolean()),
+    // How the data was fetched, for a source with two transports. Omitted by
+    // single-transport sources, which keep the plain behavior.
+    transport: v.optional(transportValidator),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -73,6 +79,27 @@ export const reportRun = internalMutation({
 
     const previousState = existing?.state ?? "current";
     const success = args.outcome === "success";
+
+    // Two transports, one source (T5): fda_rss is fetched by Convex directly
+    // AND by an off-Convex relay, because fda.gov denies Convex's egress. The
+    // state answers "are we seeing FDA's press feed" (§10), so one transport
+    // failing while the other succeeded within the delayed threshold is not a
+    // coverage gap: it isn't counted. When the other transport goes quiet too,
+    // its timestamp ages past the threshold and failures count again, so this
+    // can never hold the source current on its own.
+    if (!success && args.transport && existing) {
+      const other =
+        args.transport === "direct"
+          ? existing.relayLastSuccessAt
+          : existing.directLastSuccessAt;
+      if (other !== undefined && now - other <= 2 * POLLING_INTERVALS_MS[args.source]) {
+        console.log(
+          `[sourceHealth] ${args.source} ${args.transport} failure not counted; ` +
+            `the other transport is current (${args.error ?? "unknown error"})`,
+        );
+        return { state: existing.state, previousState, counted: false };
+      }
+    }
 
     const lastSuccessAt = success ? now : (existing?.lastSuccessAt ?? 0);
     const consecutiveFailures = success ? 0 : (existing?.consecutiveFailures ?? 0) + 1;
@@ -94,6 +121,8 @@ export const reportRun = internalMutation({
       lastError: success ? existing?.lastError : args.error ?? "unknown error",
       lastNewRecordAt:
         success && (args.newRecords ?? 0) > 0 ? now : existing?.lastNewRecordAt,
+      ...(success && args.transport === "direct" ? { directLastSuccessAt: now } : {}),
+      ...(success && args.transport === "relay" ? { relayLastSuccessAt: now } : {}),
     };
 
     if (existing === null) {
@@ -117,7 +146,7 @@ export const reportRun = internalMutation({
       });
     }
 
-    return { state, previousState };
+    return { state, previousState, counted: true };
   },
 });
 

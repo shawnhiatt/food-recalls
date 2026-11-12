@@ -153,6 +153,11 @@ export default defineSchema({
     lastNewRecordAt: v.optional(v.number()),
     consecutiveFailures: v.number(),
     lastError: v.optional(v.string()),
+    // Per-transport last success, for sources reachable two ways (fda_rss:
+    // Convex's own fetch, or the off-Convex relay, T5). A failure on one
+    // transport doesn't count while the other is current. See reportRun.
+    directLastSuccessAt: v.optional(v.number()),
+    relayLastSuccessAt: v.optional(v.number()),
   }).index("by_source", ["source"]),
 
   households: defineTable({
