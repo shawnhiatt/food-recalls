@@ -2,6 +2,10 @@
 
 Where the last session stopped. Newest entry first.
 
+## 2026-11-12: Press fixes reconciled on prod (Food Recalls (main))
+
+T6's generic-firm matcher fix (`b9810f6`) and the FDA relay (T2/T5) were each deployed to prod from their own worktrees, and the relay's deploy dropped T6's fix. Both are now merged to main (`e278b05`, pushed), and prod Convex is redeployed from main. `press:unlinkFalseMatches` dropped the 2 false M.G. Foods links the backfill had re-created; a follow-up dry run finds 0. `fda_rss` is current via the Mac launchd relay (`docs/fda-relay.md`). New rule in CLAUDE.md: deploy prod Convex only from pushed main. Open: the 21 Taylor Farms → Taylor Farms de Mexico false links (in TODO.md), the wrong "infant" risk group on the Oliva recalls (`convex/lib/enrichment.ts:99`, "Baby Ghanouj"), and the remaining health-audit tickets T3, T4, T7, T10, T11. iOS: the spec is written in `~/Documents/projects/food-recalls-ios` (uncommitted, no remote).
+
 ## 2026-11-12: FDA press relay (T2 + T5)
 
 `fda_rss` is **current on prod again** (it had been unavailable since 2026-10-24, with 150 failures). fda.gov denies Convex's egress, so a launchd agent on Shawn's Mac (`app.foodrecalls.fda-relay`, every 3h) fetches the feed and new press pages and POSTs them to the new Convex HTTP action `/relay/fda-rss` (shared secret `FDA_RELAY_SECRET`, set on prod Convex and in the Mac's login Keychain). Convex's own fetch still runs. `sourceHealth` now tracks per-transport success, and a failure on one transport isn't counted while the other is current. See `docs/fda-relay.md` for install, uninstall and rotation.

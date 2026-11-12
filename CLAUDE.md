@@ -37,6 +37,7 @@ npm run dev:web     # Next.js on :3000 (.claude/launch.json "web")
 5. **Every backend change gets tests**, in the style of `tests/*.test.ts`.
 6. **Copy follows SPEC §11:** calm and plain. "No known recall," never "safe." Possible matches say "possible."
 7. **Severity colors are quarantined** from the brand palette (SPEC §12).
+8. **Prod Convex deploys only from `main`, after it is pushed.** Never `npx convex deploy` from a ticket worktree: two ticket deploys on 2026-11-12 overwrote each other. Merge first, then deploy.
 
 ## Design
 
