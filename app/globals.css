@@ -30,6 +30,13 @@
   --color-severity-resolved: #9ca3af;
   --color-severity-outbreak: #c2410c;
 
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* `static`: ImagePlaceholder builds these names at runtime
+   (`var(--color-hazard-${hazardType}-tint)`), so Tailwind never sees them in a
+   class and would otherwise drop them from the compiled CSS (UX-02). */
+@theme static {
   /* Image-placeholder tints (§3), keyed to hazard type — a separate palette
      dimension from severity above; kept visually distinct so the two systems
      are never confused for each other. */
@@ -45,8 +52,6 @@
      the same deep-orange family as --color-severity-outbreak. */
   --color-hazard-outbreak-tint: #fce8db;
   --color-hazard-outbreak-fg: #c2410c;
-
-  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 html {
